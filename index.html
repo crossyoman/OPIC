@@ -1967,21 +1967,27 @@
       const mimeType = (audioBlob.type || 'audio/mp4').split(';')[0];
       const audioBase64 = await blobToBase64(audioBlob);
 
-      // 1단계: Netlify AI Gateway 서버리스 함수 (/api/transcribe) 호출 (0.8초 내 초고속 인식)
-      try {
-        const res = await fetch('/api/transcribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ audioBase64, mimeType })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && typeof data.transcript === 'string' && data.transcript.trim()) {
-            return data.transcript.trim();
+      // 1단계: 현재 도메인 또는 Netlify AI Gateway 서버리스 엔드포인트 호출 (Vercel 배포 시에도 즉시 작동!)
+      const transcribeEndpoints = [
+        '/api/transcribe',
+        'https://funny-valkyrie-c079e1.netlify.app/api/transcribe'
+      ];
+      for (const endpoint of transcribeEndpoints) {
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audioBase64, mimeType })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && typeof data.transcript === 'string' && data.transcript.trim()) {
+              return data.transcript.trim();
+            }
           }
+        } catch (e) {
+          // 다음 엔드포인트로 자동 폴백
         }
-      } catch (e) {
-        // /api/transcribe 미사용 환경(예: 정적 호스팅)인 경우 다음 단계로 자동 진행
       }
 
       // 2단계: 사용자가 설정 탭에 입력해둔 Gemini API 키가 있는 경우 직접 호출
