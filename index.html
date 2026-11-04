@@ -1,0 +1,2834 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="오픽코치" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <title>오픽 패턴 스피킹 코치 — 멀티 패턴 암기 & AI 음성 첨삭</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    * {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button, select, header, nav, #micButton, #quizCardContainer {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    html, body {
+      background-color: #0f172a;
+      color: #f8fafc;
+      overscroll-behavior-y: none;
+      overflow-x: hidden;
+      max-width: 100vw;
+    }
+    .safe-bottom {
+      padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+    }
+    .nav-safe-bottom {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { transform: scale(1.05); box-shadow: 0 0 0 18px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .mic-recording {
+      animation: pulse-ring 1.5s infinite;
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center bg-slate-950 text-slate-100">
+
+  <!-- App Container (Mobile-First max-w-md centered) -->
+  <div class="w-full max-w-md min-h-screen flex flex-col bg-slate-900 shadow-2xl relative safe-bottom overflow-x-hidden">
+
+    <!-- Top Header -->
+    <header class="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3.5 py-3 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="w-8 h-8 shrink-0 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-1.5 whitespace-nowrap">
+            <span>오픽 패턴 코치</span>
+            <span id="aiStatusBadge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 whitespace-nowrap">
+              내장 첨삭 ON
+            </span>
+          </h1>
+          <p class="text-[11px] text-slate-400 truncate" id="headerStatsText">패턴 0개 · 총 0문장 학습 중</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button onclick="reorganizeAllSavedPatterns(true)" class="px-2.5 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold transition active:scale-95 whitespace-nowrap" title="하나로 합쳐진 패턴들을 개별 패턴으로 자동 분리·정리">
+          ✨ 자동분리
+        </button>
+        <button onclick="switchTab('settings')" class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/70 transition active:scale-95 shrink-0" title="AI 키 및 설정">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 px-4 py-4 space-y-4">
+
+      <!-- ========================================== -->
+      <!-- TAB 1: QUIZ (실전 스피킹 테스트 & 첨삭)       -->
+      <!-- ========================================== -->
+      <section id="tab-quiz" class="space-y-3.5">
+        
+        <!-- Prominent 2-Tab Mode Selector: [패턴 지정 · 순서대로] vs [랜덤 출제] -->
+        <div class="glass-card rounded-2xl p-3 space-y-3">
+          <div class="grid grid-cols-2 gap-1.5 bg-slate-950/90 p-1.5 rounded-xl border border-slate-800">
+            <button id="modeSeqTabBtn" onclick="setQuizOrderMode('seq')" class="py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-md shadow-indigo-600/25">
+              <span>📋 순서대로 학습</span>
+            </button>
+            <button id="modeRandomTabBtn" onclick="setQuizOrderMode('random')" class="py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-white">
+              <span>🎲 범위 내 랜덤 출제</span>
+            </button>
+          </div>
+
+          <!-- Unified Start ~ End Pattern Range Controls (순서대로 & 랜덤 모드 공통 적용) -->
+          <div class="space-y-2.5 pt-0.5">
+            <!-- 1번째 탭(선택창): 학습할 시작 패턴 -->
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold text-indigo-300">1️⃣ 학습 시작 패턴 (시작 지점)</span>
+                <button onclick="setSinglePatternRangeFromStart()" class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+                  이 패턴 1개만
+                </button>
+              </div>
+              <select id="quizStartPatternSelect" onchange="onPatternRangeChange('start')" class="w-full max-w-full min-w-0 truncate bg-slate-800 text-xs font-semibold text-white rounded-xl px-3 py-2.5 border border-slate-700 focus:outline-none focus:border-indigo-500">
+              </select>
+            </div>
+
+            <!-- 2번째 탭(선택창): 학습이 끝나는 종료 패턴 (디폴트: 맨 마지막 패턴) -->
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold text-emerald-300">2️⃣ 학습 종료 패턴 (끝나는 지점 · 기본: 맨 마지막)</span>
+                <button onclick="resetPatternRangeToFull()" class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+                  끝까지(전체) 초기화
+                </button>
+              </div>
+              <select id="quizEndPatternSelect" onchange="onPatternRangeChange('end')" class="w-full max-w-full min-w-0 truncate bg-slate-800 text-xs font-semibold text-white rounded-xl px-3 py-2.5 border border-slate-700 focus:outline-none focus:border-emerald-500">
+              </select>
+            </div>
+
+            <!-- 선택된 범위 요약 바 & 랜덤 다시 섞기 버튼 -->
+            <div class="flex items-center justify-between gap-2 bg-slate-950/70 border border-slate-800/90 rounded-xl px-3 py-2">
+              <span id="patternRangeSummaryText" class="text-[11px] font-bold text-slate-300 truncate">
+                🎯 학습 범위: 전체 패턴
+              </span>
+              <button id="reshuffleBtnInBar" onclick="reshuffleRandomQuiz()" class="hidden shrink-0 px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold active:scale-95 transition">
+                🔀 다시 섞기
+              </button>
+            </div>
+
+            <!-- Sentence step pills (#1, #2, #3...) -->
+            <div id="sentenceStepPills" class="flex items-center gap-1.5 overflow-x-auto pb-0.5"></div>
+          </div>
+        </div>
+
+        <!-- Question Card -->
+        <div id="quizCardContainer" class="glass-card rounded-2xl p-5 space-y-4 relative overflow-hidden">
+          <!-- Progress & Navigation Top Row -->
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span id="quizIndexBadge" class="text-xs font-bold px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                1 / 3
+              </span>
+              <span id="quizKeywordBadge" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                키워드: 운동
+              </span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button onclick="deleteCurrentQuizSentence()" class="px-2 py-1.5 rounded-lg bg-rose-950/50 hover:bg-rose-900/70 text-rose-300 border border-rose-800/50 text-[11px] font-semibold" title="현재 문제 삭제">
+                🗑️ 삭제
+              </button>
+              <button onclick="prevQuestion()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold" title="이전 문제">
+                ◀
+              </button>
+              <button onclick="nextQuestion()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold" title="다음 문제">
+                ▶
+              </button>
+            </div>
+          </div>
+
+          <!-- Current Pattern Header Info -->
+          <div class="bg-slate-950/60 border border-slate-800/90 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+            <div class="text-[11px] text-slate-400 truncate">
+              <span class="text-indigo-400 font-bold" id="quizPatternLabel">패턴:</span>
+              <span id="quizPatternSubText" class="text-slate-300 font-medium ml-1">That's why ~ has become an important part of my life</span>
+            </div>
+            <button onclick="togglePatternHint()" id="patternHintBtn" class="shrink-0 text-[11px] text-amber-300 hover:text-amber-200 font-semibold">
+              힌트 보기
+            </button>
+          </div>
+
+          <!-- Pattern Hint Box (Collapsible) -->
+          <div id="patternHintBox" class="hidden bg-slate-800/90 border border-amber-500/30 rounded-xl p-3 text-center space-y-1">
+            <p class="text-[11px] text-amber-300 font-medium">핵심 문장 패턴 힌트</p>
+            <p id="quizPatternText" class="text-sm font-bold text-white font-mono">I really enjoy ~ alone.</p>
+            <p id="quizFirstWordsHint" class="text-xs text-slate-400"></p>
+          </div>
+
+          <!-- Korean Prompt Question -->
+          <div class="py-2 text-center space-y-2.5">
+            <p class="text-[11px] uppercase tracking-wider font-semibold text-indigo-400">다음 한국어 문장을 영어로 말해보세요</p>
+            <h2 id="quizKoreanPrompt" class="text-xl font-bold text-white leading-snug break-keep px-1">
+              "그것이 바로 운동이 제 삶의 중요한 부분이 된 이유입니다."
+            </h2>
+            <div class="flex items-center justify-center gap-2 pt-1">
+              <button onclick="speakKoreanPrompt()" class="inline-flex items-center gap-1 text-xs text-slate-300 hover:text-indigo-300 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700/70 transition">
+                🔊 한국어 문제 듣기
+              </button>
+            </div>
+          </div>
+
+          <!-- Voice Input Microphone Area (100% Pure Voice - No Keyboard Popup) -->
+          <div class="flex flex-col items-center pt-2 pb-1 space-y-3">
+            <!-- KakaoTalk In-App Browser Warning & 1-Tap External Browser Button -->
+            <div id="inAppBrowserBanner" class="hidden w-full bg-amber-500/15 border border-amber-500/40 rounded-xl p-3 text-center space-y-2">
+              <p class="text-xs font-bold text-amber-200">
+                ⚠️ 카카오톡 내부 브라우저에서는 마이크가 차단될 수 있습니다
+              </p>
+              <button onclick="openInExternalBrowser()" class="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition">
+                🌐 여기를 눌러 Chrome / Safari에서 마이크 켜기
+              </button>
+            </div>
+
+            <button id="micButton" type="button" onclick="toggleSpeechRecognition()" oncontextmenu="return false;" class="w-28 h-28 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white flex flex-col items-center justify-center shadow-xl shadow-indigo-600/30 transition transform active:scale-95 border-2 border-indigo-400/30 select-none">
+              <svg id="micIcon" class="w-10 h-10 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/>
+              </svg>
+              <span id="micBtnLabel" class="text-[11px] font-extrabold mt-1.5 tracking-tight pointer-events-none">한 번 눌러 시작</span>
+            </button>
+
+            <p id="micStatusText" class="text-xs font-medium text-slate-300 text-center px-2 select-none">
+              마이크를 <b>한 번 누르면 녹음 시작</b>, 다 말한 뒤 <b>다시 한 번 누르면 종료·채점</b>됩니다
+            </p>
+          </div>
+
+          <!-- Pure Voice Transcript Display Box (No Keyboard Popup!) -->
+          <div class="space-y-2 pt-1">
+            <div class="bg-slate-950/90 border border-slate-800 rounded-xl px-4 py-3 min-h-[3.5rem] flex items-center justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <div class="text-[10px] font-semibold text-indigo-400 mb-0.5">🎙️ 내가 말한 영어 음성 인식 결과</div>
+                <div id="voiceTranscriptDisplay" class="text-sm font-bold text-slate-400 break-words">
+                  마이크를 누르고 말씀하시면 여기에 표시됩니다.
+                </div>
+              </div>
+              <button onclick="clearUserAnswer()" class="shrink-0 text-[11px] text-slate-500 hover:text-slate-300 px-2 py-1">
+                초기화
+              </button>
+            </div>
+
+            <!-- Optional Manual Typing Toggle (Hidden by default so keyboard never pops up!) -->
+            <div class="text-right">
+              <button onclick="toggleManualTypeBox()" class="text-[11px] text-slate-500 hover:text-slate-300 underline">
+                ⌨️ 음성 대신 직접 타이핑해서 테스트하려면 터치
+              </button>
+            </div>
+            <div id="manualTypeContainer" class="hidden">
+              <textarea id="userSpokenInput" rows="2"
+                placeholder="직접 영어로 타이핑할 때만 사용하세요"
+                oninput="syncManualInputToDisplay()"
+                class="w-full bg-slate-950/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
+            </div>
+            
+            <div class="flex gap-2">
+              <button id="evaluateBtn" onclick="evaluateUserAnswer()" class="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-indigo-600/25 transition flex items-center justify-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>정확도 채점 & 첨삭 받기</span>
+              </button>
+              <button onclick="speakTargetAnswer()" class="px-3.5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition flex items-center gap-1" title="정답 원어민 발음 듣기">
+                🔊 정답 듣기
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 4-STEP COACHING RESULT CARD                -->
+        <!-- ========================================== -->
+        <div id="feedbackCard" class="hidden glass-card rounded-2xl p-5 space-y-4 border-t-4 border-t-indigo-500">
+          <!-- 1. 얼마나 정확한지 (Score & Word-by-Word Comparison) -->
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3.5">
+            <div>
+              <span id="feedbackBadge" class="inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mb-1">
+                PERFECT
+              </span>
+              <h3 class="text-base font-bold text-white" id="feedbackHeadline">완벽하게 일치합니다!</h3>
+            </div>
+            <div class="text-right">
+              <div class="text-2xl font-extrabold text-indigo-400" id="feedbackScoreText">100%</div>
+              <div class="text-[11px] text-slate-400">문장 정확도</div>
+            </div>
+          </div>
+
+          <!-- Word Diff Comparison Box -->
+          <div class="space-y-2.5 bg-slate-950/70 rounded-xl p-3.5 border border-slate-800">
+            <div>
+              <div class="text-[11px] font-semibold text-slate-400 mb-1">① 내가 말한 문장 vs 단어별 채점</div>
+              <div id="wordDiffContainer" class="text-sm leading-relaxed font-medium"></div>
+            </div>
+            <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+              <div>
+                <div class="text-[11px] font-semibold text-emerald-400 mb-0.5">목표 정답 문장</div>
+                <div id="feedbackTargetSentence" class="text-sm font-bold text-white"></div>
+              </div>
+              <button onclick="speakTargetAnswer()" class="shrink-0 p-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold flex items-center gap-1">
+                🔊 발음 듣기
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. 뭐가 부족했고 / 3. 어떻게 고쳐야 하고 / 4. 이유는 뭔지 -->
+          <div class="space-y-2.5">
+            <div class="bg-slate-800/60 rounded-xl p-3.5 border border-slate-700/60">
+              <div class="flex items-center gap-1.5 text-xs font-bold text-rose-300 mb-1">
+                <span>🔍 1. 뭐가 부족했나요? (부족한 점 분석)</span>
+              </div>
+              <p id="feedbackLacking" class="text-xs text-slate-200 leading-relaxed"></p>
+            </div>
+
+            <div class="bg-slate-800/60 rounded-xl p-3.5 border border-slate-700/60">
+              <div class="flex items-center gap-1.5 text-xs font-bold text-amber-300 mb-1">
+                <span>🛠️ 2. 어떻게 고쳐야 하나요? (교정 표현)</span>
+              </div>
+              <p id="feedbackHowToFix" class="text-xs text-slate-200 leading-relaxed"></p>
+            </div>
+
+            <div class="bg-slate-800/60 rounded-xl p-3.5 border border-slate-700/60">
+              <div class="flex items-center gap-1.5 text-xs font-bold text-sky-300 mb-1">
+                <span>💡 3. 이유는 무엇인가요? (핵심 문법·패턴 포인트)</span>
+              </div>
+              <p id="feedbackWhy" class="text-xs text-slate-200 leading-relaxed"></p>
+            </div>
+
+            <div id="feedbackBonusBox" class="bg-indigo-950/40 rounded-xl p-3.5 border border-indigo-500/30">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-indigo-300">🎯 오픽 IH/AL 실전 확장 한 문장 팁</span>
+                <button onclick="speakBonusSentence()" id="speakBonusBtn" class="text-[11px] text-indigo-300 hover:text-white underline">발음 듣기</button>
+              </div>
+              <p id="feedbackBonusText" class="text-xs text-slate-300 leading-relaxed"></p>
+            </div>
+          </div>
+
+          <!-- Next Action Buttons -->
+          <div class="flex gap-2 pt-1">
+            <button onclick="retryCurrentQuestion()" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition">
+              🎙️ 다시 말해보기
+            </button>
+            <button onclick="nextQuestion()" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition">
+              다음 문제로 이동 →
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 2: ADD MULTIPLE PATTERNS AT ONCE       -->
+      <!-- ========================================== -->
+      <section id="tab-add" class="hidden space-y-4">
+        
+        <!-- Multi-Pattern Smart Paste Card -->
+        <div class="glass-card rounded-2xl p-4 space-y-3 border border-indigo-500/30">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-sm font-bold text-white flex items-center gap-1.5">
+                ⚡ 멀티 패턴 한 번에 입력 (여러 패턴 동시 등록)
+              </h2>
+              <p class="text-[11px] text-slate-400 mt-0.5">
+                패턴 1개든, 패턴 10개든 한꺼번에 붙여넣으세요! 각 패턴별로 3문장씩 자동으로 쪼개서 정리합니다.
+              </p>
+            </div>
+            <button onclick="fillSampleMultiPaste()" class="shrink-0 text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 font-semibold">
+              여러 패턴 예시
+            </button>
+          </div>
+
+          <textarea id="smartPasteInput" rows="8"
+            oninput="onSmartPasteLiveInput()"
+            placeholder="패턴 19: 저는 혼자 ~하는 것을 정말 즐겨요. / I really enjoy ~ alone.
+* 영화 / I really enjoy watching movies alone.
+* 음악 / I really enjoy listening to music alone.
+* 카페 / I really enjoy going to a cafe alone.
+
+패턴 20: 그것이 바로 ~가 제 삶의 중요한 부분이 된 이유입니다. / That's why ~ has become an important part of my life
+* 운동 / That's why working out has become an important part of my life
+* 음악감상 / That's why listening to music has become an important part of my life
+* 카페방문/ That's why going to cafes has become an important part of my life"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 leading-relaxed"></textarea>
+
+          <!-- Typo Notice Alert -->
+          <div id="typoAlertBox" class="hidden bg-amber-500/15 border border-amber-500/40 rounded-xl p-3 text-xs text-amber-200 space-y-1">
+            <div class="font-bold flex items-center gap-1">✨ 영어 철자 오타 자동 보정 안내</div>
+            <div id="typoAlertList" class="text-[11px] space-y-0.5"></div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button id="parseAndGenerateBtn" onclick="parseMultiPatternsAndPreview(true)" class="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/30 font-bold text-xs transition flex items-center justify-center gap-1">
+              <span>🔍 패턴별 분리 미리보기</span>
+            </button>
+            <button onclick="saveAllParsedPatterns()" class="py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/25 transition flex items-center justify-center gap-1">
+              <span>💾 한 번에 모두 저장하기</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Multi-Pattern Parsed Preview Container -->
+        <div id="multiPatternPreviewSection" class="space-y-3">
+          <div class="flex items-center justify-between px-1">
+            <h3 class="text-xs font-bold text-indigo-300" id="previewCountTitle">
+              📋 패턴별 분리 결과 (입력창에 붙여넣으면 여기에 패턴별로 나뉘어 표시됩니다)
+            </h3>
+            <button onclick="resetAddForm()" class="text-xs text-slate-400 hover:text-white">초기화</button>
+          </div>
+
+          <div id="multiPatternCardsContainer" class="space-y-3"></div>
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 3: LIBRARY & DELETE (문장 관리 · 삭제)   -->
+      <!-- ========================================== -->
+      <section id="tab-library" class="hidden space-y-4">
+        
+        <!-- Auto-Reorganize & Bulk Delete Action Header -->
+        <div class="glass-card rounded-2xl p-4 space-y-3 border border-indigo-500/30">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-sm font-bold text-white">🗂️ 저장된 패턴 · 문장 관리 및 삭제</h2>
+              <p class="text-[11px] text-slate-400 mt-0.5">
+                하나로 뭉쳐진 여러 패턴을 자동으로 개별 패턴으로 쪼개거나, 원치 않는 문장·패턴을 삭제할 수 있습니다.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="reorganizeAllSavedPatterns(true)" class="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition flex items-center justify-center gap-1">
+              <span>✨ 뭉친 패턴 자동 분리·정리</span>
+            </button>
+            <button onclick="deleteSelectedItems()" id="deleteSelectedBtn" class="py-2.5 px-3 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition flex items-center justify-center gap-1">
+              <span>🗑️ 체크한 문장 삭제</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="patternLibraryList" class="space-y-3.5"></div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 4: SETTINGS (AI 설정 & 스마트폰 가이드)   -->
+      <!-- ========================================== -->
+      <section id="tab-settings" class="hidden space-y-4">
+        
+        <!-- Gemini API Key Setup -->
+        <div class="glass-card rounded-2xl p-4 space-y-3 border border-indigo-500/30">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-bold text-white flex items-center gap-1.5">
+              🤖 무료 Gemini AI 연동 (선택사항)
+            </h2>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="text-[11px] text-indigo-400 hover:underline font-medium">
+              무료 API 키 발급받기 ↗
+            </a>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            API 키가 없어도 <strong>내장 패턴·한국어 조사 자동 결합 및 문법 첨삭 엔진</strong>으로 완벽히 작동합니다. Gemini API 키를 넣으면 AI 원어민 코칭이 추가됩니다.
+          </p>
+          <div class="space-y-2">
+            <input id="geminiApiKeyInput" type="password" placeholder="AIzaSy... 로 시작하는 Gemini API 키 입력" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500" />
+            <div class="flex gap-2">
+              <button onclick="saveAndTestApiKey()" id="testApiBtn" class="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition">
+                키 저장 및 연결 테스트
+              </button>
+              <button onclick="clearApiKey()" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700">
+                키 삭제
+              </button>
+            </div>
+            <p id="apiKeyTestResult" class="text-xs text-slate-400"></p>
+          </div>
+        </div>
+
+        <!-- Speech & Quiz Preferences -->
+        <div class="glass-card rounded-2xl p-4 space-y-3">
+          <h3 class="text-sm font-bold text-white">🎙️ 음성 인식 & 발음 설정</h3>
+          
+          <div class="flex items-center justify-between py-1">
+            <div>
+              <div class="text-xs font-semibold text-slate-200">말하기 종료 후 자동 채점</div>
+              <div class="text-[11px] text-slate-400">음성 인식이 끝나면 버튼을 안 눌러도 바로 첨삭합니다</div>
+            </div>
+            <input id="autoEvaluateToggle" type="checkbox" checked onchange="savePreferences()" class="w-4 h-4 accent-indigo-500 rounded" />
+          </div>
+
+          <div class="flex items-center justify-between py-1">
+            <div class="text-xs font-semibold text-slate-200">원어민 음성(TTS) 속도</div>
+            <select id="ttsRateSelect" onchange="savePreferences()" class="bg-slate-800 text-xs text-white rounded-lg px-2.5 py-1.5 border border-slate-700">
+              <option value="0.8">0.8x (천천히 또박또박)</option>
+              <option value="0.92" selected>0.92x (오픽 실전 권장)</option>
+              <option value="1.0">1.0x (기본 원어민 속도)</option>
+              <option value="1.1">1.1x (빠르게)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Backup & Sync between PC / Smartphone -->
+        <div class="glass-card rounded-2xl p-4 space-y-3">
+          <h3 class="text-sm font-bold text-white">📲 데이터 백업 / 스마트폰으로 옮기기</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            등록한 패턴과 학습 기록을 복사해서 카카오톡 '나에게 보내기'로 스마트폰에 붙여넣을 수 있습니다.
+          </p>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="copyBackupToClipboard()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700">
+              📋 데이터 복사하기
+            </button>
+            <button onclick="pasteBackupFromPrompt()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700">
+              📥 데이터 붙여넣기
+            </button>
+            <button onclick="exportBackupJson()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700">
+              💾 파일로 저장(.json)
+            </button>
+            <label class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 text-center cursor-pointer">
+              📂 파일 불러오기
+              <input type="file" accept=".json" onchange="importBackupJson(event)" class="hidden" />
+            </label>
+          </div>
+          <button onclick="resetToDefaultPatterns()" class="w-full py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 text-xs border border-rose-800/50 mt-2">
+            초기 샘플 데이터로 초기화
+          </button>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 nav-safe-bottom">
+      <div class="grid grid-cols-4 h-16">
+        <button onclick="switchTab('quiz')" id="nav-quiz" class="flex flex-col items-center justify-center gap-1 text-indigo-400 font-semibold">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/></svg>
+          <span class="text-[11px]">실전 퀴즈</span>
+        </button>
+        <button onclick="switchTab('add')" id="nav-add" class="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          <span class="text-[11px]">패턴 입력</span>
+        </button>
+        <button onclick="switchTab('library')" id="nav-library" class="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          <span class="text-[11px]">문장 관리·삭제</span>
+        </button>
+        <button onclick="switchTab('settings')" id="nav-settings" class="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"/></svg>
+          <span class="text-[11px]">설정·백업</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Toast Notification -->
+    <div id="toastBox" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 hidden bg-slate-800 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-xl border border-slate-600 transition-all"></div>
+
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. DEFAULT DATA
+    // =========================================================================
+    const STORAGE_KEY_PATTERNS = 'opic_coach_patterns_v1';
+    const STORAGE_KEY_API = 'opic_coach_gemini_key_v1';
+    const STORAGE_KEY_PREFS = 'opic_coach_prefs_v1';
+
+    const DEFAULT_PATTERNS = [
+      {
+        id: 'pat-20',
+        pattern: "That's why ~ has become an important part of my life.",
+        note: '패턴 20: 그것이 바로 ~가 제 삶의 중요한 부분이 된 이유입니다.',
+        createdAt: Date.now(),
+        sentences: [
+          {
+            id: 's-2001',
+            keyword: '운동',
+            english: "That's why working out has become an important part of my life.",
+            korean: '그것이 바로 운동이 제 삶의 중요한 부분이 된 이유입니다.',
+            attempts: 0,
+            bestScore: 0
+          },
+          {
+            id: 's-2002',
+            keyword: '음악감상',
+            english: "That's why listening to music has become an important part of my life.",
+            korean: '그것이 바로 음악감상이 제 삶의 중요한 부분이 된 이유입니다.',
+            attempts: 0,
+            bestScore: 0
+          },
+          {
+            id: 's-2003',
+            keyword: '카페방문',
+            english: "That's why going to cafes has become an important part of my life.",
+            korean: '그것이 바로 카페방문이 제 삶의 중요한 부분이 된 이유입니다.',
+            attempts: 0,
+            bestScore: 0
+          }
+        ]
+      },
+      {
+        id: 'pat-1',
+        pattern: 'I really enjoy ~ alone.',
+        note: '패턴 19: 나는 혼자 ~하는 것을 정말 즐겨요.',
+        createdAt: Date.now() - 60000,
+        sentences: [
+          {
+            id: 's-101',
+            keyword: '영화',
+            english: 'I really enjoy watching movies alone.',
+            korean: '나는 혼자 영화 보는 것을 정말 즐겨요.',
+            attempts: 0,
+            bestScore: 0
+          },
+          {
+            id: 's-102',
+            keyword: '음악',
+            english: 'I really enjoy listening to music alone.',
+            korean: '나는 혼자 음악 듣는 것을 정말 즐겨요.',
+            attempts: 0,
+            bestScore: 0
+          },
+          {
+            id: 's-103',
+            keyword: '카페',
+            english: 'I really enjoy going to a cafe alone.',
+            korean: '나는 혼자 카페에 가는 것을 정말 즐겨요.',
+            attempts: 0,
+            bestScore: 0
+          }
+        ]
+      }
+    ];
+
+    const COMMON_TYPOS = {
+      'becaome': 'become',
+      'becoem': 'become',
+      'becom': 'become',
+      'improtant': 'important',
+      'importent': 'important',
+      'mosic': 'music',
+      'musci': 'music',
+      'listning': 'listening',
+      'waching': 'watching',
+      'watchig': 'watching',
+      'enjoi': 'enjoy',
+      'realy': 'really',
+      'alon': 'alone',
+      'caffe': 'cafe',
+      'coffe': 'coffee',
+      'exersise': 'exercise',
+      'usally': 'usually',
+      'usuall': 'usually',
+      'freind': 'friend',
+      'freinds': 'friends',
+      'resturant': 'restaurant'
+    };
+
+    let patterns = [];
+    let quizQueue = [];
+    let currentQuizIdx = 0;
+    let quizOrderMode = 'seq';
+    let currentBonusEnglish = '';
+    let isRecording = false;
+    let recognition = null;
+    let previewParsedPatterns = []; // 멀티 패턴 미리보기 상태
+
+    let prefs = {
+      autoEvaluate: true,
+      ttsRate: 0.92
+    };
+    let micPermissionGranted = false;
+
+    // =========================================================================
+    // 2. INITIALIZATION & DEEP MULTI-PATTERN SPLITTER FOR ALREADY SAVED DATA
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      // 이전 버전 서비스 워커 캐시 강제 초기화 (구버전 화면이 남아있는 현상 방지)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          regs.forEach(r => r.unregister());
+        }).catch(() => {});
+      }
+      if ('caches' in window) {
+        caches.keys().then(keys => {
+          keys.forEach(k => caches.delete(k));
+        }).catch(() => {});
+      }
+
+      checkInAppBrowserOnLoad();
+      loadData();
+      initSpeechRecognition();
+      renderFilterOptions();
+      buildQuizQueue();
+      renderCurrentQuestion();
+      renderMultiPatternPreview([]);
+      renderLibrary();
+      updateHeaderStats();
+    });
+
+    function checkInAppBrowserOnLoad() {
+      const ua = navigator.userAgent || '';
+      const proto = window.location.protocol;
+      const banner = document.getElementById('inAppBrowserBanner');
+      if (proto === 'file:' || proto === 'content:') {
+        if (banner) {
+          banner.classList.remove('hidden');
+          banner.innerHTML = `
+            <p class="text-xs font-bold text-amber-200 leading-relaxed">
+              ⚠️ 현재 <b>다운로드된 파일(${proto})</b>로 열려 있습니다!<br/>
+              크롬 브라우저는 보안 정책상 다운로드된 파일에서는 마이크를 차단합니다.<br/>
+              반드시 <b>https:// 웹 링크 주소</b>로 접속해주세요!
+            </p>
+          `;
+        }
+      } else if (/KAKAOTALK/i.test(ua)) {
+        if (banner) banner.classList.remove('hidden');
+      }
+    }
+
+    function openInExternalBrowser() {
+      const url = window.location.href;
+      const ua = navigator.userAgent || '';
+      if (/KAKAOTALK/i.test(ua)) {
+        window.location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
+      } else if (/Android/i.test(ua)) {
+        const cleanUrl = url.replace(/^https?:\/\//i, '');
+        window.location.href = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+      } else {
+        prompt('아래 주소를 복사하여 Safari 또는 Chrome 주소창에 붙여넣어 주세요:', url);
+      }
+    }
+
+    function loadData() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_PATTERNS);
+        if (saved) {
+          patterns = JSON.parse(saved);
+          // 이미 저장된 데이터 중 여러 패턴이 하나로 합쳐진 항목들을 자동으로 개별 패턴으로 분리·정리!
+          reorganizeAllSavedPatterns(false);
+        } else {
+          patterns = JSON.parse(JSON.stringify(DEFAULT_PATTERNS));
+        }
+        if (!Array.isArray(patterns) || patterns.length === 0) {
+          patterns = JSON.parse(JSON.stringify(DEFAULT_PATTERNS));
+        }
+        localStorage.setItem(STORAGE_KEY_PATTERNS, JSON.stringify(patterns));
+      } catch (e) {
+        patterns = JSON.parse(JSON.stringify(DEFAULT_PATTERNS));
+      }
+
+      try {
+        const savedPrefs = localStorage.getItem(STORAGE_KEY_PREFS);
+        if (savedPrefs) prefs = { ...prefs, ...JSON.parse(savedPrefs) };
+      } catch (e) {}
+
+      document.getElementById('autoEvaluateToggle').checked = prefs.autoEvaluate;
+      document.getElementById('ttsRateSelect').value = String(prefs.ttsRate);
+
+      const apiKey = localStorage.getItem(STORAGE_KEY_API) || '';
+      document.getElementById('geminiApiKeyInput').value = apiKey;
+      updateAiBadge();
+    }
+
+    // =========================================================================
+    // 3. MULTI-PATTERN SMART PARSER & GIANT PATTERN SPLITTER
+    // =========================================================================
+    function checkAndFixTyposInSentence(sentence) {
+      const fixes = [];
+      const fixedSentence = String(sentence || '').replace(/\b([A-Za-z]+)\b/g, (match) => {
+        const lower = match.toLowerCase();
+        if (COMMON_TYPOS[lower]) {
+          const replacement = COMMON_TYPOS[lower];
+          fixes.push({ wrong: match, right: replacement });
+          return replacement;
+        }
+        return match;
+      });
+      return { fixedSentence, fixes };
+    }
+
+    function getKoreanBatchimInfo(word) {
+      const clean = (word || '').trim().replace(/[()[\]{}'",.?!/\s]+$/g, '');
+      if (!clean) return { hasBatchim: false, isRieul: false };
+      const lastChar = clean.charCodeAt(clean.length - 1);
+      if (lastChar < 0xAC00 || lastChar > 0xD7A3) {
+        return { hasBatchim: false, isRieul: false };
+      }
+      const jongseong = (lastChar - 0xAC00) % 28;
+      return {
+        hasBatchim: jongseong !== 0,
+        isRieul: jongseong === 8
+      };
+    }
+
+    // 키워드와 영어 문장(동사/동명사)을 대조하여 한국어 문장 속에서 가장 자연스럽고 영작과 1:1로 대응되는 표현으로 변환
+    function refineKeywordForTemplate(keyword, koreanTemplate, englishSentence) {
+      let kw = (keyword || '').trim();
+      const tpl = (koreanTemplate || '').trim();
+      const eng = (englishSentence || '').toLowerCase();
+      if (!kw) return kw;
+
+      // 1) 템플릿에 '~하는' / '~할 때' / '~하면' 등이 있을 때, 단순 명사 키워드('영화', '음악', '카페')를 영어 동사에 맞춰 자연스럽게 확장
+      const tplHasHaneun = /~\s*(?:하는|할\s*때|하면|해서|하기|하곤|합니다|해요)/.test(tpl);
+
+      if (tplHasHaneun) {
+        if (kw === '영화' || kw === '영화시청' || kw === '영화 시청') kw = '영화 보기';
+        else if (kw === '드라마' || kw === '드라마시청') kw = '드라마 보기';
+        else if (kw === '유튜브' || kw === '유튜브시청' || kw === '유튜브 시청') kw = '유튜브 보기';
+        else if (kw === '음악' || kw === '음악감상' || kw === '음악 감상') kw = '음악 듣기';
+        else if (kw === '노래') kw = '노래 듣기';
+        else if (kw === '카페' || kw === '카페방문' || kw === '카페 방문') kw = '카페에 가기';
+        else if (kw === '공원' && eng.includes('walk')) kw = '공원 산책하기';
+        else if (kw === '공원') kw = '공원에 가기';
+        else if (kw === '헬스장' && (eng.includes('work out') || eng.includes('exercise'))) kw = '헬스장에서 운동하기';
+        else if (kw === '헬스장') kw = '헬스장에 가기';
+        else if (kw === '커피' && eng.includes('drink')) kw = '커피 마시기';
+        else if (kw === '책' || kw === '독서') kw = '책 읽기';
+        else if (kw === '사진') kw = '사진 찍기';
+        else if (kw === '친구' && eng.includes('meet')) kw = '친구 만나기';
+        else if (kw === '맛집') kw = '맛집에 가기';
+      } else {
+        // 2) 템플릿이 명사 자리('~가', '~은', '~을')일 때도 영어 문장이 동명사구(working out, listening to music, going to cafes)라면
+        // 영작할 때 동사(watch, listen, go, work out)가 바로 떠오르도록 자연스러운 한국어 동명사형('~하는 것')으로 매칭!
+        if ((kw === '음악감상' || kw === '음악 감상' || kw === '음악') && eng.includes('listening to music')) {
+          kw = '음악 듣는 것';
+        } else if ((kw === '카페방문' || kw === '카페 방문' || kw === '카페' || kw === '카페 가기') && (eng.includes('going to cafe') || eng.includes('going to a cafe'))) {
+          kw = '카페에 가는 것';
+        } else if ((kw === '영화시청' || kw === '영화 시청' || kw === '영화' || kw === '영화 보기') && eng.includes('watching movie')) {
+          kw = '영화 보는 것';
+        } else if ((kw === '운동' || kw === '운동하기') && (eng.includes('working out') || eng.includes('exercising'))) {
+          kw = '운동하는 것';
+        } else if (kw === '산책' && (eng.includes('taking a walk') || eng.includes('walking'))) {
+          kw = '산책하는 것';
+        }
+      }
+
+      return kw;
+    }
+
+    function polishNaturalKoreanSentence(sentence) {
+      if (!sentence) return '';
+      let s = sentence.trim();
+
+      // 1) '~기 하는' / '~기하는' 형태를 한국어 어법에 맞는 관형사형/활용형으로 자연스럽게 교정
+      const giHaneunMap = [
+        [/카페\s*가기\s*하는/g, '카페에 가는'],
+        [/카페에\s*가기\s*하는/g, '카페에 가는'],
+        [/가기\s*하는/g, '가는'],
+        [/보기\s*하는/g, '보는'],
+        [/듣기\s*하는/g, '듣는'],
+        [/하기\s*하는/g, '하는'],
+        [/먹기\s*하는/g, '먹는'],
+        [/마시기\s*하는/g, '마시는'],
+        [/읽기\s*하는/g, '읽는'],
+        [/찍기\s*하는/g, '찍는'],
+        [/쓰기\s*하는/g, '쓰는'],
+        [/만들기\s*하는/g, '만드는'],
+        [/놀기\s*하는/g, '노는'],
+        [/풀기\s*하는/g, '푸는'],
+        [/떨기\s*하는/g, '떠는'],
+        [/열기\s*하는/g, '여는'],
+        [/살기\s*하는/g, '사는'],
+        [/걸기\s*하는/g, '거는'],
+        [/자기\s*하는/g, '자는'],
+        [/쉬기\s*하는/g, '쉬는'],
+        [/걷기\s*하는/g, '걷는'],
+        [/뛰기\s*하는/g, '뛰는'],
+        [/찾기\s*하는/g, '찾는'],
+        [/받기\s*하는/g, '받는'],
+        [/타기\s*하는/g, '타는'],
+        [/사기\s*하는/g, '사는'],
+        [/보내기\s*하는/g, '보내는'],
+        [/만나기\s*하는/g, '만나는'],
+        [/나누기\s*하는/g, '나누는'],
+        [/배우기\s*하는/g, '배우는'],
+        [/즐기기\s*하는/g, '즐기는'],
+        // '~기 할 때' / '~기 하면' / '~기 합니다' / '~기 해요' 교정
+        [/가기\s*할\s*때/g, '갈 때'],
+        [/보기\s*할\s*때/g, '볼 때'],
+        [/듣기\s*할\s*때/g, '들을 때'],
+        [/하기\s*할\s*때/g, '할 때'],
+        [/먹기\s*할\s*때/g, '먹을 때'],
+        [/마시기\s*할\s*때/g, '마실 때'],
+        [/가기\s*합니다/g, '갑니다'],
+        [/보기\s*합니다/g, '봅니다'],
+        [/듣기\s*합니다/g, '듣습니다'],
+        [/하기\s*합니다/g, '합니다'],
+        [/먹기\s*합니다/g, '먹습니다'],
+        [/마시기\s*합니다/g, '마십니다'],
+        [/읽기\s*합니다/g, '읽습니다'],
+        [/가기\s*해요/g, '가요'],
+        [/보기\s*해요/g, '봐요'],
+        [/듣기\s*해요/g, '들어요'],
+        [/하기\s*해요/g, '해요'],
+        // '것가' -> '것이', '것는' -> '것은', '것를' -> '것을' 등 조사 어색함 자동 보정
+        [/것가(?=\s|$|[.,!?])/g, '것이'],
+        [/것는(?=\s|$|[.,!?])/g, '것은'],
+        [/것를(?=\s|$|[.,!?])/g, '것을'],
+        [/하는\s*것하는/g, '하는']
+      ];
+
+      for (const [regex, replacement] of giHaneunMap) {
+        s = s.replace(regex, replacement);
+      }
+
+      // 일반 규칙: 남은 '[한글]기 하는' 패턴 처리
+      s = s.replace(/([가-힣]+)기\s*하는/g, '$1는');
+
+      return s;
+    }
+
+    function buildKoreanPromptFromTemplate(koreanTemplate, keyword, englishSentence = '') {
+      if (!koreanTemplate || !keyword) return '';
+      let tpl = koreanTemplate.replace(/^패턴\s*\d*\s*[:：.]?\s*/i, '').trim();
+      const kw = refineKeywordForTemplate(keyword, tpl, englishSentence);
+      const { hasBatchim, isRieul } = getKoreanBatchimInfo(kw);
+
+      tpl = tpl
+        .replace(/~(?:이\/가|가\/이)/g, kw + (hasBatchim ? '이' : '가'))
+        .replace(/~(?:은\/는|는\/은)/g, kw + (hasBatchim ? '은' : '는'))
+        .replace(/~(?:을\/를|를\/을)/g, kw + (hasBatchim ? '을' : '를'))
+        .replace(/~(?:과\/와|와\/과)/g, kw + (hasBatchim ? '과' : '와'))
+        .replace(/~(?:으로\/로|로\/으로)/g, kw + (hasBatchim && !isRieul ? '으로' : '로'))
+        .replace(/~가(?=\s|$|[.,!?])/g, kw + (hasBatchim ? '이' : '가'))
+        .replace(/~이(?=\s|$|[.,!?])/g, kw + (hasBatchim ? '이' : '가'))
+        .replace(/~는(?=\s|$|[.,!?])/g, kw + (hasBatchim ? '은' : '는'))
+        .replace(/~은(?=\s|$|[.,!?])/g, kw + (hasBatchim ? '은' : '는'))
+        .replace(/~를(?=\s|$|[.,!?])/g, kw + (hasBatchim ? '을' : '를'))
+        .replace(/~을(?=\s|$|[.,!?])/g, kw + (hasBatchim ? '을' : '를'))
+        .replace(/~와(?=\s|$|[.,!?])/g, kw + (hasBatchim ? '과' : '와'))
+        .replace(/~과(?=\s|$|[.,!?])/g, kw + (hasBatchim ? '과' : '와'))
+        .replace(/~로(?=\s|$|[.,!?])/g, kw + (hasBatchim && !isRieul ? '으로' : '로'))
+        .replace(/~/g, kw);
+
+      return polishNaturalKoreanSentence(tpl);
+    }
+
+    function splitKoreanAndEnglishLine(rawLine) {
+      let line = String(rawLine || '').trim();
+      const isBullet = /^[-*•▪▸]+/.test(line);
+      const isPatternHeader =
+        /^\[?\s*(?:패턴|pattern)\s*\d*\s*\]?\s*[:：.-]?\s*/i.test(line) ||
+        line.includes('~') ||
+        line.includes('___');
+
+      let patternPrefixLabel = '';
+      if (/^\[?\s*(?:패턴|pattern)\s*\d*\s*\]?\s*[:：.-]?\s*/i.test(line)) {
+        const match = line.match(/^\[?\s*((?:패턴|pattern)\s*\d*)\s*\]?\s*[:：.-]?\s*/i);
+        if (match) {
+          patternPrefixLabel = match[1].trim();
+          line = line.slice(match[0].length).trim();
+        }
+      } else if (isBullet) {
+        line = line.replace(/^[-*•▪▸]+\s*/, '').trim();
+      } else if (/^\d+[.)]\s+/.test(line) && !isPatternHeader) {
+        line = line.replace(/^\d+[.)]\s+/, '').trim();
+      }
+
+      if (line.includes('/') || line.includes('|')) {
+        const sep = line.includes('/') ? '/' : '|';
+        const idx = line.indexOf(sep);
+        const left = line.slice(0, idx).trim();
+        const right = line.slice(idx + 1).trim();
+        if (/[a-zA-Z]/.test(right)) {
+          return { isPatternHeader, isBullet, patternPrefixLabel, korean: left, english: right };
+        } else if (/[a-zA-Z]/.test(left)) {
+          return { isPatternHeader, isBullet, patternPrefixLabel, korean: right, english: left };
+        }
+      }
+
+      const colonIdx = line.indexOf(':');
+      if (colonIdx > 0) {
+        const left = line.slice(0, colonIdx).trim();
+        const right = line.slice(colonIdx + 1).trim();
+        if (/[a-zA-Z]/.test(right) && /[가-힣]/.test(left)) {
+          return { isPatternHeader, isBullet, patternPrefixLabel, korean: left, english: right };
+        }
+      }
+
+      const korEngMatch = line.match(/^([가-힣\s~.,!?()]+?)\s+([A-Za-z].*)$/);
+      if (korEngMatch) {
+        return {
+          isPatternHeader,
+          isBullet,
+          patternPrefixLabel,
+          korean: korEngMatch[1].trim(),
+          english: korEngMatch[2].trim()
+        };
+      }
+
+      if (/[a-zA-Z]{2,}/.test(line) && !/[가-힣]/.test(line)) {
+        return { isPatternHeader, isBullet, patternPrefixLabel, korean: '', english: line };
+      }
+      return { isPatternHeader, isBullet, patternPrefixLabel, korean: line, english: '' };
+    }
+
+    function inferCommonPattern(sentences) {
+      const valid = sentences.map(s => String(s || '').trim().replace(/\.$/, '')).filter(Boolean);
+      if (!valid.length) return '';
+      if (valid.length === 1) return valid[0];
+
+      const splitList = valid.map(s => s.split(/\s+/));
+      const first = splitList[0];
+      const minLen = Math.min(...splitList.map(a => a.length));
+
+      let prefixLen = 0;
+      while (
+        prefixLen < minLen &&
+        splitList.every(arr => areWordsEquivalent(normalizeWord(arr[prefixLen]), normalizeWord(first[prefixLen])))
+      ) {
+        prefixLen++;
+      }
+
+      let suffixLen = 0;
+      while (
+        suffixLen < (minLen - prefixLen) &&
+        splitList.every(arr =>
+          areWordsEquivalent(
+            normalizeWord(arr[arr.length - 1 - suffixLen]),
+            normalizeWord(first[first.length - 1 - suffixLen])
+          )
+        )
+      ) {
+        suffixLen++;
+      }
+
+      const prefix = first.slice(0, prefixLen).join(' ');
+      const suffix = suffixLen > 0 ? first.slice(first.length - suffixLen).join(' ') : '';
+      if (prefix && suffix) return `${prefix} ~ ${suffix}`;
+      if (prefix) return `${prefix} ~`;
+      if (suffix) return `~ ${suffix}`;
+      return valid[0];
+    }
+
+    // 두 영어 문장이 같은 패턴 구조(앞 2단어 이상 또는 뒤 3단어 이상 일치)를 공유하는지 판별
+    function doSentencesSharePattern(sentA, sentB) {
+      const wordsA = tokenizeSentence(sentA).map(t => t.norm);
+      const wordsB = tokenizeSentence(sentB).map(t => t.norm);
+      if (wordsA.length < 3 || wordsB.length < 3) return true;
+
+      let prefixMatch = 0;
+      while (
+        prefixMatch < Math.min(wordsA.length, wordsB.length) &&
+        areWordsEquivalent(wordsA[prefixMatch], wordsB[prefixMatch])
+      ) {
+        prefixMatch++;
+      }
+
+      let suffixMatch = 0;
+      while (
+        suffixMatch < Math.min(wordsA.length, wordsB.length) &&
+        areWordsEquivalent(wordsA[wordsA.length - 1 - suffixMatch], wordsB[wordsB.length - 1 - suffixMatch])
+      ) {
+        suffixMatch++;
+      }
+
+      return prefixMatch >= 2 || suffixMatch >= 3 || (prefixMatch >= 1 && suffixMatch >= 1);
+    }
+
+    function inferDefaultKoreanTemplate(engPattern) {
+      const lower = (engPattern || '').toLowerCase();
+      if (lower.includes("that's why") && lower.includes('important part of my life')) {
+        return '그것이 바로 ~가 제 삶의 중요한 부분이 된 이유입니다.';
+      }
+      if (lower.startsWith('i really enjoy ') && lower.includes('alone')) {
+        return '나는 혼자 ~하는 것을 정말 즐겨요.';
+      }
+      if (lower.startsWith('whenever i have free time, i usually')) {
+        return '여가 시간이 있을 때마다, 나는 주로 ~을 해요.';
+      }
+      return '';
+    }
+
+    async function translateEnglishToKoreanNatural(english, keyword, koreanPatternTemplate) {
+      if (koreanPatternTemplate && keyword && (koreanPatternTemplate.includes('~') || koreanPatternTemplate.includes('...')) && !/^문장\s*\d+$/.test(keyword)) {
+        return buildKoreanPromptFromTemplate(koreanPatternTemplate, keyword, english);
+      }
+
+      const lower = english.trim().toLowerCase();
+      if (lower.startsWith('i really enjoy ') && (lower.endsWith('alone.') || lower.endsWith('alone'))) {
+        if (lower.includes('watching movies')) return '나는 혼자 영화 보는 것을 정말 즐겨요.';
+        if (lower.includes('listening to music')) return '나는 혼자 음악 듣는 것을 정말 즐겨요.';
+        if (lower.includes('going to a cafe') || lower.includes('going to cafes')) return '나는 혼자 카페에 가는 것을 정말 즐겨요.';
+        if (keyword) return polishNaturalKoreanSentence(`나는 혼자 ${keyword} 하는 것을 정말 즐겨요.`);
+      }
+
+      try {
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q=${encodeURIComponent(english)}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          const translated = data?.[0]?.map(part => part[0]).join('') || '';
+          if (translated.trim()) return polishNaturalKoreanSentence(translated.trim());
+        }
+      } catch (e) {}
+
+      if (keyword) return `[${keyword}] 관련 문장을 영어로 말해보세요.`;
+      return '이 문장을 영어로 말해보세요.';
+    }
+
+    // ★ 핵심: 여러 개의 패턴이 한꺼번에 입력된 텍스트를 패턴 단위로 자동 분리하는 멀티 파서 ★
+    function parseMultiplePatternsSync(rawText) {
+      const rawLines = String(rawText || '').split(/\r?\n/);
+      const groups = [];
+      let currentGroup = null;
+      const allTypoFixes = [];
+      let lastLineWasEmpty = true;
+
+      function startNewGroup() {
+        currentGroup = {
+          headerEnglishPattern: '',
+          headerKoreanTemplate: '',
+          headerPrefixLabel: '',
+          sentences: []
+        };
+        groups.push(currentGroup);
+      }
+
+      for (let i = 0; i < rawLines.length; i++) {
+        const rawLine = rawLines[i].trim();
+        if (!rawLine) {
+          lastLineWasEmpty = true;
+          continue;
+        }
+
+        const info = splitKoreanAndEnglishLine(rawLine);
+        const isExplicitHeader =
+          info.isPatternHeader ||
+          (!info.isBullet && lastLineWasEmpty && currentGroup && currentGroup.sentences.length > 0 && (rawLine.includes('~') || !info.korean));
+
+        if (isExplicitHeader) {
+          // 만약 현재 그룹에 이미 예문이 들어있다면 새 패턴 그룹 시작!
+          if (!currentGroup || currentGroup.sentences.length > 0) {
+            startNewGroup();
+          }
+          if (info.patternPrefixLabel) currentGroup.headerPrefixLabel = info.patternPrefixLabel;
+          if (info.korean) currentGroup.headerKoreanTemplate = info.korean;
+          if (info.english) {
+            const { fixedSentence } = checkAndFixTyposInSentence(info.english);
+            currentGroup.headerEnglishPattern = fixedSentence;
+          }
+          lastLineWasEmpty = false;
+          continue;
+        }
+
+        // 일반 예문 줄인 경우
+        if (info.english) {
+          if (!currentGroup) startNewGroup();
+
+          const { fixedSentence, fixes } = checkAndFixTyposInSentence(info.english);
+
+          // 만약 사용자가 헤더 줄 없이 여러 패턴의 예문들을 연속으로 붙여넣은 경우:
+          // 기존 그룹에 이미 3문장 이상이 있고, 새 문장이 기존 문장들과 패턴 구조를 전혀 공유하지 않거나 빈 줄 뒤라면 새 패턴으로 자동 분리!
+          if (
+            currentGroup.sentences.length >= 3 &&
+            (lastLineWasEmpty || !doSentencesSharePattern(currentGroup.sentences[0].english, fixedSentence))
+          ) {
+            startNewGroup();
+          } else if (
+            !currentGroup.headerEnglishPattern &&
+            currentGroup.sentences.length >= 2 &&
+            !doSentencesSharePattern(currentGroup.sentences[0].english, fixedSentence)
+          ) {
+            startNewGroup();
+          }
+
+          const kw = info.korean || `문장 ${currentGroup.sentences.length + 1}`;
+          fixes.forEach(f => allTypoFixes.push(`"${f.wrong}" → "${f.right}" (${kw})`));
+
+          currentGroup.sentences.push({
+            id: 's-' + Date.now() + '-' + groups.length + '-' + currentGroup.sentences.length,
+            keyword: kw,
+            english: fixedSentence,
+            korean: '',
+            attempts: 0,
+            bestScore: 0
+          });
+        } else if (info.korean && (!currentGroup || currentGroup.sentences.length > 0)) {
+          // 한글로만 된 패턴 제목 줄인 경우
+          startNewGroup();
+          if (info.patternPrefixLabel) currentGroup.headerPrefixLabel = info.patternPrefixLabel;
+          currentGroup.headerKoreanTemplate = info.korean;
+        }
+
+        lastLineWasEmpty = false;
+      }
+
+      // 각 패턴 그룹별로 핵심 영어 패턴 및 한국어 출제 문제 완성
+      const validGroups = groups.filter(g => g.sentences.length > 0);
+      const resultPatterns = validGroups.map((g, idx) => {
+        const inferredEng = inferCommonPattern(g.sentences.map(s => s.english));
+        const finalEngPattern = g.headerEnglishPattern || inferredEng || g.sentences[0].english;
+        const finalKorTemplate = g.headerKoreanTemplate || inferDefaultKoreanTemplate(finalEngPattern);
+        const fullNote = [g.headerPrefixLabel, finalKorTemplate].filter(Boolean).join(': ');
+
+        g.sentences.forEach(s => {
+          if (finalKorTemplate && (finalKorTemplate.includes('~') || finalKorTemplate.includes('...')) && !/^문장\s*\d+$/.test(s.keyword)) {
+            s.korean = buildKoreanPromptFromTemplate(finalKorTemplate, s.keyword, s.english);
+          } else if (s.keyword && s.keyword.length >= 10 && /[다요죠까]\.?$/.test(s.keyword)) {
+            s.korean = polishNaturalKoreanSentence(s.keyword);
+          }
+        });
+
+        return {
+          id: 'pat-' + Date.now() + '-' + idx + '-' + Math.random().toString(36).slice(2, 5),
+          pattern: finalEngPattern,
+          note: fullNote,
+          koreanTemplate: finalKorTemplate,
+          createdAt: Date.now() - idx * 1000,
+          sentences: g.sentences
+        };
+      });
+
+      return { patternsList: resultPatterns, allTypoFixes };
+    }
+
+    // ★ 이미 하나로 뭉쳐서 저장된 거대 패턴을 여러 개의 개별 패턴으로 자동 분리·정리하는 엔진 ★
+    async function reorganizeAllSavedPatterns(showMessage = true) {
+      if (!Array.isArray(patterns) || patterns.length === 0) return;
+
+      let splitOrFixedCount = 0;
+      const expandedPatterns = [];
+
+      for (const p of patterns) {
+        const sents = p.sentences || [];
+        // 이 패턴 안에 여러 패턴 헤더('패턴 N', '~')가 섞여 있거나, 문장이 4개 이상인데 서로 다른 패턴들이 합쳐져 있는지 확인
+        const hasEmbeddedHeaders = sents.some(s =>
+          /^패턴\s*\d*/i.test(s.keyword || '') ||
+          (s.english || '').includes('~') ||
+          ((s.english || '').includes('/') && /[가-힣]/.test(s.english || ''))
+        );
+        const hasMultipleDifferentStructures =
+          sents.length > 3 &&
+          sents.some((s, idx) => idx > 0 && !doSentencesSharePattern(sents[0].english || '', s.english || ''));
+
+        if (hasEmbeddedHeaders || hasMultipleDifferentStructures) {
+          // 원본 줄들을 복원하여 멀티 패턴 파서로 깔끔하게 쪼개기!
+          const reconstructedLines = [];
+          if (p.note || p.pattern) {
+            if (p.note && p.pattern && !p.pattern.includes('/')) {
+              reconstructedLines.push(`${p.note} / ${p.pattern}`);
+            } else {
+              reconstructedLines.push(p.pattern || p.note);
+            }
+          }
+          for (const s of sents) {
+            const kw = (s.keyword || '').trim();
+            const eng = (s.english || '').trim();
+            if (/^패턴\s*\d*/i.test(kw) || eng.includes('~')) {
+              reconstructedLines.push('');
+              reconstructedLines.push(kw && !eng.startsWith(kw) ? `${kw}: ${eng}` : eng);
+            } else if (eng.includes('/') && /[가-힣]/.test(eng)) {
+              reconstructedLines.push(`* ${eng}`);
+            } else {
+              reconstructedLines.push(`* ${kw} / ${eng}`);
+            }
+          }
+
+          const { patternsList } = parseMultiplePatternsSync(reconstructedLines.join('\n'));
+          if (patternsList.length > 0) {
+            for (const subPat of patternsList) {
+              for (const s of subPat.sentences) {
+                if (!s.korean) {
+                  s.korean = await translateEnglishToKoreanNatural(s.english, s.keyword, subPat.koreanTemplate);
+                }
+              }
+              expandedPatterns.push(subPat);
+            }
+            splitOrFixedCount += patternsList.length;
+            continue;
+          }
+        }
+
+        // 단일 패턴 내부 정리
+        const korTpl = extractKoreanTemplateFromNote(p.note || '') || inferDefaultKoreanTemplate(p.pattern);
+        for (const s of sents) {
+          const { fixedSentence, fixes } = checkAndFixTyposInSentence(s.english || '');
+          if (fixes.length > 0) {
+            s.english = fixedSentence;
+            splitOrFixedCount++;
+          }
+          if (korTpl && (korTpl.includes('~') || korTpl.includes('...')) && !/^문장\s*\d+$/.test(s.keyword)) {
+            const built = buildKoreanPromptFromTemplate(korTpl, s.keyword, s.english);
+            if (built && s.korean !== built) {
+              s.korean = built;
+              splitOrFixedCount++;
+            }
+          } else if (!s.korean || s.korean.includes('/')) {
+            s.korean = await translateEnglishToKoreanNatural(s.english, s.keyword, korTpl);
+            splitOrFixedCount++;
+          } else {
+            const polished = polishNaturalKoreanSentence(s.korean);
+            if (polished !== s.korean) {
+              s.korean = polished;
+              splitOrFixedCount++;
+            }
+          }
+        }
+        expandedPatterns.push(p);
+      }
+
+      // ★ 3단계 중복 제거 엔진 (패턴 제목 중복 + 동일 영어 예문 중복 + 빈 패턴 자동 삭제) ★
+      function normalizeSentenceKey(str) {
+        return expandContractionsInText(String(str || ''))
+          .toLowerCase()
+          .split(/\s+/)
+          .map(w => normalizeWord(w))
+          .join('')
+          .replace(/[^a-z0-9]/g, '');
+      }
+
+      function normalizePatternKey(str) {
+        return expandContractionsInText(String(str || ''))
+          .toLowerCase()
+          .replace(/~/g, '')
+          .split(/\s+/)
+          .map(w => normalizeWord(w))
+          .join('')
+          .replace(/[^a-z0-9]/g, '');
+      }
+
+      const uniquePatternMap = new Map();
+      const seenSentenceKeys = new Set();
+      const finalPatterns = [];
+      let removedDuplicatesCount = 0;
+
+      for (const p of expandedPatterns) {
+        // 1) 이미 등장한 동일 영어 문장(중복 예문) 자동 제거
+        const uniqueSentences = [];
+        for (const s of (p.sentences || [])) {
+          const sKey = normalizeSentenceKey(s.english);
+          if (!sKey) continue;
+          if (seenSentenceKeys.has(sKey)) {
+            removedDuplicatesCount++;
+            continue;
+          }
+          seenSentenceKeys.add(sKey);
+          uniqueSentences.push(s);
+        }
+
+        if (uniqueSentences.length === 0) {
+          removedDuplicatesCount++;
+          continue;
+        }
+        p.sentences = uniqueSentences;
+
+        // 2) 동일한 패턴 제목이면 하나로 병합
+        const pKey = normalizePatternKey(p.pattern);
+        if (pKey && uniquePatternMap.has(pKey)) {
+          const existingPat = uniquePatternMap.get(pKey);
+          existingPat.sentences.push(...p.sentences);
+          removedDuplicatesCount++;
+        } else {
+          if (pKey) uniquePatternMap.set(pKey, p);
+          finalPatterns.push(p);
+        }
+      }
+
+      // 3) '패턴 1', '패턴 2'... 번호가 있는 경우 번호 순서대로 정렬하여 범위 지정(예: 8~10)이 직관적으로 동작하도록 보장
+      finalPatterns.sort((a, b) => {
+        const mA = (a.note || '').match(/^패턴\s*(\d+)/i);
+        const mB = (b.note || '').match(/^패턴\s*(\d+)/i);
+        if (mA && mB) return Number(mA[1]) - Number(mB[1]);
+        if (mA && !mB) return -1;
+        if (!mA && mB) return 1;
+        return 0;
+      });
+
+      patterns = finalPatterns;
+      savePatterns();
+      buildQuizQueue();
+      renderCurrentQuestion();
+      renderLibrary();
+
+      if (showMessage) {
+        const dupMsg = removedDuplicatesCount > 0 ? ` (중복 ${removedDuplicatesCount}건 자동 삭제)` : '';
+        showToast(`✨ 총 ${patterns.length}개의 패턴으로 깔끔하게 정리되었습니다!${dupMsg}`);
+      }
+    }
+
+    function extractKoreanTemplateFromNote(text) {
+      if (!text) return '';
+      const cleaned = text.replace(/^패턴\s*\d*\s*[:：.]?\s*/i, '').split('/')[0].trim();
+      if (/[가-힣]/.test(cleaned) && (cleaned.includes('~') || cleaned.includes('...'))) {
+        return cleaned;
+      }
+      return '';
+    }
+
+    function savePatterns() {
+      localStorage.setItem(STORAGE_KEY_PATTERNS, JSON.stringify(patterns));
+      updateHeaderStats();
+      renderFilterOptions();
+      renderLibrary();
+    }
+
+    function updateHeaderStats() {
+      const totalPatterns = patterns.length;
+      const totalSentences = patterns.reduce((acc, p) => acc + p.sentences.length, 0);
+      const mastered = patterns.reduce(
+        (acc, p) => acc + p.sentences.filter(s => (s.bestScore || 0) >= 90).length,
+        0
+      );
+      document.getElementById('headerStatsText').textContent =
+        `패턴 ${totalPatterns}개 · 총 ${totalSentences}문장 (암기완료 ${mastered}문장)`;
+    }
+
+    function updateAiBadge() {
+      const key = (localStorage.getItem(STORAGE_KEY_API) || '').trim();
+      const badge = document.getElementById('aiStatusBadge');
+      if (key) {
+        badge.textContent = '✨ Gemini AI 첨삭 ON';
+        badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40';
+      } else {
+        badge.textContent = '내장 문법 첨삭 ON';
+        badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700';
+      }
+    }
+
+    function showToast(msg) {
+      const box = document.getElementById('toastBox');
+      box.textContent = msg;
+      box.classList.remove('hidden');
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => box.classList.add('hidden'), 2800);
+    }
+
+    // =========================================================================
+    // 4. TAB NAVIGATION
+    // =========================================================================
+    function switchTab(tabName) {
+      ['quiz', 'add', 'library', 'settings'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tabName);
+        const navBtn = document.getElementById(`nav-${t}`);
+        if (t === tabName) {
+          navBtn.className = 'flex flex-col items-center justify-center gap-1 text-indigo-400 font-semibold';
+        } else {
+          navBtn.className = 'flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-200';
+        }
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // =========================================================================
+    // 5. QUIZ MODES: [패턴 지정 · 순서대로] VS [랜덤 출제]
+    // =========================================================================
+    // 퀴즈 화면 상단에는 영어 스포일러 없이 순수 한국어 패턴 뜻만 표시하는 헬퍼
+    function getKoreanPatternDisplay(patternNote, patternTitle, sentences = []) {
+      if (patternNote) {
+        // 괄호 안의 영문 문법 설명(예: (enjoy + V-ing...))이나 슬래시 뒤 영문 제거
+        let korOnly = patternNote
+          .split('/')[0]
+          .replace(/\([^)]*[a-zA-Z]+[^)]*\)/g, '')
+          .trim();
+        if (/[가-힣]/.test(korOnly)) return korOnly;
+      }
+
+      const defaultKor = inferDefaultKoreanTemplate(patternTitle);
+      if (defaultKor) return defaultKor;
+
+      // 문장의 한국어 문제에서 키워드 부분을 '~'로 치환하여 한국어 패턴 자동 생성
+      if (sentences && sentences.length > 0) {
+        const first = sentences[0];
+        if (first.korean && first.keyword && first.korean.includes(first.keyword)) {
+          return first.korean.replace(first.keyword, '~');
+        }
+        if (first.korean) return first.korean;
+      }
+      return '한국어 문제를 보고 영어 패턴을 떠올려보세요';
+    }
+
+    let hasCustomEndPattern = false;
+
+    function getShortPatternLabel(p, idx) {
+      if (!p) return `패턴 ${idx + 1}`;
+      const m = (p.note || '').match(/^패턴\s*(\d+)/i);
+      if (m) return `패턴 ${m[1]}`;
+      return `패턴 ${idx + 1}`;
+    }
+
+    function renderFilterOptions() {
+      const startSelect = document.getElementById('quizStartPatternSelect');
+      const endSelect = document.getElementById('quizEndPatternSelect');
+      if (!startSelect || !endSelect) return;
+
+      const prevStartVal = startSelect.value;
+      const prevEndVal = endSelect.value;
+
+      startSelect.innerHTML = '';
+      endSelect.innerHTML = '';
+
+      if (patterns.length === 0) {
+        startSelect.innerHTML = `<option value="">등록된 패턴 없음</option>`;
+        endSelect.innerHTML = `<option value="">등록된 패턴 없음</option>`;
+        updatePatternRangeSummary(0, -1, 0);
+        return;
+      }
+
+      patterns.forEach((p, idx) => {
+        let korDisplay = getKoreanPatternDisplay(p.note, p.pattern, p.sentences);
+        if (!/^패턴\s*\d+/i.test(korDisplay)) {
+          korDisplay = `패턴 ${idx + 1}: ${korDisplay}`;
+        }
+
+        const optStart = document.createElement('option');
+        optStart.value = p.id;
+        optStart.textContent = `${korDisplay} (${p.sentences.length}문장)`;
+        startSelect.appendChild(optStart);
+
+        const optEnd = document.createElement('option');
+        optEnd.value = p.id;
+        const isLast = idx === patterns.length - 1;
+        optEnd.textContent = isLast
+          ? `${korDisplay} (${p.sentences.length}문장 · 맨 마지막)`
+          : `${korDisplay} (${p.sentences.length}문장)`;
+        endSelect.appendChild(optEnd);
+      });
+
+      // 시작 지점 복원 (기본값: 첫 번째 패턴)
+      if (prevStartVal && [...startSelect.options].some(o => o.value === prevStartVal)) {
+        startSelect.value = prevStartVal;
+      } else {
+        startSelect.value = patterns[0].id;
+      }
+
+      // 종료 지점 복원 (기본값: 맨 마지막 패턴)
+      if (hasCustomEndPattern && prevEndVal && [...endSelect.options].some(o => o.value === prevEndVal)) {
+        endSelect.value = prevEndVal;
+      } else {
+        endSelect.value = patterns[patterns.length - 1].id;
+        hasCustomEndPattern = false;
+      }
+
+      // 만약 시작 인덱스가 종료 인덱스보다 뒤에 있으면 종료 지점을 맨 마지막 패턴으로 자동 보정
+      if (startSelect.selectedIndex > endSelect.selectedIndex) {
+        endSelect.selectedIndex = patterns.length - 1;
+        hasCustomEndPattern = false;
+      }
+    }
+
+    function updatePatternRangeSummary(minIdx, maxIdx, totalSentences) {
+      const summaryEl = document.getElementById('patternRangeSummaryText');
+      if (!summaryEl) return;
+      if (patterns.length === 0 || maxIdx < minIdx) {
+        summaryEl.textContent = '🎯 학습 범위: 등록된 문장 없음';
+        return;
+      }
+      const startLabel = getShortPatternLabel(patterns[minIdx], minIdx);
+      const endLabel = getShortPatternLabel(patterns[maxIdx], maxIdx);
+      const patCount = maxIdx - minIdx + 1;
+      const modeText = quizOrderMode === 'random' ? '🎲 범위 내 랜덤' : '📋 순서대로';
+
+      if (minIdx === maxIdx) {
+        summaryEl.textContent = `🎯 ${startLabel} 집중 학습 (${totalSentences}문장 · ${modeText})`;
+      } else {
+        summaryEl.textContent = `🎯 ${startLabel} ~ ${endLabel} (${patCount}개 패턴 · ${totalSentences}문장 · ${modeText})`;
+      }
+    }
+
+    function setQuizOrderMode(mode) {
+      quizOrderMode = mode;
+      const seqBtn = document.getElementById('modeSeqTabBtn');
+      const rndBtn = document.getElementById('modeRandomTabBtn');
+      const reshuffleBtn = document.getElementById('reshuffleBtnInBar');
+
+      if (mode === 'seq') {
+        seqBtn.className = 'py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-md shadow-indigo-600/25';
+        rndBtn.className = 'py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-white';
+        if (reshuffleBtn) reshuffleBtn.classList.add('hidden');
+      } else {
+        rndBtn.className = 'py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 bg-emerald-600 text-white shadow-md shadow-emerald-600/25';
+        seqBtn.className = 'py-2.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-white';
+        if (reshuffleBtn) reshuffleBtn.classList.remove('hidden');
+      }
+
+      currentQuizIdx = 0;
+      buildQuizQueue();
+      renderCurrentQuestion();
+    }
+
+    function onPatternRangeChange(changedWhich) {
+      const startSelect = document.getElementById('quizStartPatternSelect');
+      const endSelect = document.getElementById('quizEndPatternSelect');
+      if (!startSelect || !endSelect || !patterns.length) return;
+
+      let startIdx = startSelect.selectedIndex;
+      let endIdx = endSelect.selectedIndex;
+
+      if (changedWhich === 'end') {
+        hasCustomEndPattern = (endIdx !== patterns.length - 1);
+        // 종료 패턴을 시작 패턴보다 앞 번호로 고르면 시작 패턴도 해당 번호로 자동 맞춤
+        if (endIdx < startIdx) {
+          startSelect.selectedIndex = endIdx;
+        }
+      } else if (changedWhich === 'start') {
+        // 시작 패턴을 현재 종료 패턴보다 뒷 번호로 고르면 종료 패턴을 맨 마지막 패턴으로 자동 확장
+        if (startIdx > endIdx) {
+          endSelect.selectedIndex = patterns.length - 1;
+          hasCustomEndPattern = false;
+        }
+      }
+
+      currentQuizIdx = 0;
+      buildQuizQueue();
+      renderCurrentQuestion();
+    }
+
+    function setSinglePatternRangeFromStart() {
+      const startSelect = document.getElementById('quizStartPatternSelect');
+      const endSelect = document.getElementById('quizEndPatternSelect');
+      if (!startSelect || !endSelect || !patterns.length) return;
+
+      endSelect.selectedIndex = startSelect.selectedIndex;
+      hasCustomEndPattern = (endSelect.selectedIndex !== patterns.length - 1);
+      currentQuizIdx = 0;
+      buildQuizQueue();
+      renderCurrentQuestion();
+      const label = getShortPatternLabel(patterns[startSelect.selectedIndex], startSelect.selectedIndex);
+      showToast(`🎯 ${label} 한 개만 집중 학습하도록 설정했습니다!`);
+    }
+
+    function resetPatternRangeToFull() {
+      const startSelect = document.getElementById('quizStartPatternSelect');
+      const endSelect = document.getElementById('quizEndPatternSelect');
+      if (!startSelect || !endSelect || !patterns.length) return;
+
+      startSelect.selectedIndex = 0;
+      endSelect.selectedIndex = patterns.length - 1;
+      hasCustomEndPattern = false;
+      currentQuizIdx = 0;
+      buildQuizQueue();
+      renderCurrentQuestion();
+      showToast('🎯 처음 패턴부터 맨 마지막 패턴까지 전체 범위로 설정했습니다!');
+    }
+
+    function reshuffleRandomQuiz() {
+      currentQuizIdx = 0;
+      buildQuizQueue();
+      renderCurrentQuestion();
+      showToast('선택한 패턴 범위 내에서 문제를 새로 섞었습니다! 🎲');
+    }
+
+    function buildQuizQueue() {
+      const startSelect = document.getElementById('quizStartPatternSelect');
+      const endSelect = document.getElementById('quizEndPatternSelect');
+
+      if (!patterns.length) {
+        quizQueue = [];
+        currentQuizIdx = 0;
+        updatePatternRangeSummary(0, -1, 0);
+        return;
+      }
+
+      let startIdx = startSelect ? startSelect.selectedIndex : 0;
+      let endIdx = endSelect ? endSelect.selectedIndex : patterns.length - 1;
+      if (startIdx < 0) startIdx = 0;
+      if (endIdx < 0) endIdx = patterns.length - 1;
+
+      const minIdx = Math.min(startIdx, endIdx);
+      const maxIdx = Math.max(startIdx, endIdx);
+
+      let items = [];
+      for (let pIdx = minIdx; pIdx <= maxIdx; pIdx++) {
+        const p = patterns[pIdx];
+        if (!p) continue;
+        const shortPatLabel = getShortPatternLabel(p, pIdx);
+        p.sentences.forEach((s, idx) => {
+          items.push({
+            patternId: p.id,
+            patternIndex: pIdx,
+            patternShortLabel: shortPatLabel,
+            patternTitle: p.pattern,
+            patternNote: p.note || '',
+            sentenceId: s.id,
+            sentenceOrderInPattern: idx + 1,
+            keyword: s.keyword,
+            english: s.english,
+            korean: s.korean,
+            bestScore: s.bestScore || 0,
+            attempts: s.attempts || 0
+          });
+        });
+      }
+
+      updatePatternRangeSummary(minIdx, maxIdx, items.length);
+
+      if (quizOrderMode === 'random') {
+        for (let i = items.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [items[i], items[j]] = [items[j], items[i]];
+        }
+      }
+
+      quizQueue = items;
+      if (currentQuizIdx >= quizQueue.length) currentQuizIdx = 0;
+    }
+
+    function getCurrentQuizItem() {
+      if (!quizQueue.length) return null;
+      if (currentQuizIdx >= quizQueue.length) currentQuizIdx = 0;
+      if (currentQuizIdx < 0) currentQuizIdx = quizQueue.length - 1;
+      return quizQueue[currentQuizIdx];
+    }
+
+    function renderSentenceStepPills() {
+      const container = document.getElementById('sentenceStepPills');
+      if (!container) return;
+      if (quizOrderMode !== 'seq' || !quizQueue.length) {
+        container.innerHTML = '';
+        return;
+      }
+      container.innerHTML = quizQueue.map((q, idx) => {
+        const isCurrent = idx === currentQuizIdx;
+        const done = (q.bestScore || 0) >= 90;
+        const cls = isCurrent
+          ? 'bg-indigo-600 text-white border-indigo-400 font-bold'
+          : done
+            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+            : 'bg-slate-800/90 text-slate-400 border-slate-700 hover:text-white';
+        const patPrefix = q.patternShortLabel ? `${q.patternShortLabel.replace('패턴 ', 'P')}-` : '#';
+        return `
+          <button onclick="jumpToQuizIndex(${idx})" class="shrink-0 text-[11px] px-2.5 py-1 rounded-lg border transition ${cls}">
+            ${patPrefix}${q.sentenceOrderInPattern} (${escapeHtml(q.keyword)}) ${done ? '✓' : ''}
+          </button>
+        `;
+      }).join('');
+    }
+
+    function jumpToQuizIndex(idx) {
+      stopSpeechRecognitionIfActive();
+      currentQuizIdx = idx;
+      renderCurrentQuestion();
+    }
+
+    function setVoiceTranscriptText(text, isPlaceholder = false) {
+      const display = document.getElementById('voiceTranscriptDisplay');
+      const input = document.getElementById('userSpokenInput');
+      if (isPlaceholder || !text) {
+        display.textContent = '마이크를 누르고 말씀하시면 여기에 표시됩니다.';
+        display.className = 'text-sm font-bold text-slate-400 break-words';
+        if (input) input.value = '';
+      } else {
+        display.textContent = text;
+        display.className = 'text-sm font-extrabold text-white break-words';
+        if (input) input.value = text;
+      }
+    }
+
+    function toggleManualTypeBox() {
+      const box = document.getElementById('manualTypeContainer');
+      box.classList.toggle('hidden');
+      if (!box.classList.contains('hidden')) {
+        document.getElementById('userSpokenInput').focus();
+      }
+    }
+
+    function syncManualInputToDisplay() {
+      const val = document.getElementById('userSpokenInput').value;
+      const display = document.getElementById('voiceTranscriptDisplay');
+      if (val.trim()) {
+        display.textContent = val;
+        display.className = 'text-sm font-extrabold text-white break-words';
+      } else {
+        display.textContent = '마이크를 누르고 말씀하시면 여기에 표시됩니다.';
+        display.className = 'text-sm font-bold text-slate-400 break-words';
+      }
+    }
+
+    function renderCurrentQuestion() {
+      const item = getCurrentQuizItem();
+      document.getElementById('feedbackCard').classList.add('hidden');
+      document.getElementById('patternHintBox').classList.add('hidden');
+      setVoiceTranscriptText('', true);
+      renderSentenceStepPills();
+
+      if (!item) {
+        document.getElementById('quizKoreanPrompt').textContent = '등록된 문장이 없습니다. [패턴 입력] 탭에서 문장을 추가해주세요!';
+        document.getElementById('quizIndexBadge').textContent = '0 / 0';
+        document.getElementById('quizKeywordBadge').textContent = '키워드 없음';
+        document.getElementById('quizPatternSubText').textContent = '-';
+        return;
+      }
+
+      const modePrefix = quizOrderMode === 'random' ? '🎲 랜덤 ' : '📋 순서 ';
+      document.getElementById('quizIndexBadge').textContent = `${modePrefix}${currentQuizIdx + 1} / ${quizQueue.length}`;
+      document.getElementById('quizKeywordBadge').textContent = `키워드: ${item.keyword || '기본'}`;
+      document.getElementById('quizKoreanPrompt').textContent = `"${item.korean}"`;
+
+      // 상단 패턴 표시줄에는 한국어 패턴만 표시하고, 영어 패턴은 [힌트 보기]를 눌렀을 때만 노출!
+      const parentPat = patterns.find(p => p.id === item.patternId);
+      const korPatternDisplay = getKoreanPatternDisplay(
+        item.patternNote,
+        item.patternTitle,
+        parentPat ? parentPat.sentences : [item]
+      );
+      document.getElementById('quizPatternSubText').textContent = korPatternDisplay;
+      document.getElementById('quizPatternText').textContent = item.patternTitle;
+      document.getElementById('patternHintBtn').textContent = '힌트 보기';
+
+      const words = item.english.split(/\s+/);
+      const firstTwo = words.slice(0, Math.min(3, words.length)).join(' ');
+      document.getElementById('quizFirstWordsHint').textContent =
+        `첫 어절 힌트: "${firstTwo} ..." (총 ${words.length}단어)`;
+    }
+
+    function prevQuestion() {
+      stopSpeechRecognitionIfActive();
+      currentQuizIdx--;
+      renderCurrentQuestion();
+    }
+
+    function nextQuestion() {
+      stopSpeechRecognitionIfActive();
+      currentQuizIdx++;
+      renderCurrentQuestion();
+    }
+
+    function retryCurrentQuestion() {
+      document.getElementById('feedbackCard').classList.add('hidden');
+      setVoiceTranscriptText('', true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => toggleSpeechRecognition(), 200);
+    }
+
+    function togglePatternHint() {
+      const box = document.getElementById('patternHintBox');
+      const btn = document.getElementById('patternHintBtn');
+      const isHidden = box.classList.toggle('hidden');
+      if (btn) btn.textContent = isHidden ? '힌트 보기' : '힌트 닫기';
+    }
+
+    function clearUserAnswer() {
+      setVoiceTranscriptText('', true);
+      document.getElementById('feedbackCard').classList.add('hidden');
+    }
+
+    function deleteCurrentQuizSentence() {
+      const item = getCurrentQuizItem();
+      if (!item) return;
+      if (!confirm(`현재 문제 [${item.keyword}: "${item.korean}"] 문장을 삭제할까요?`)) return;
+      deleteSentenceById(item.patternId, item.sentenceId);
+    }
+
+    // =========================================================================
+    // 6. TAP-ONCE-TO-START / TAP-AGAIN-TO-STOP VOICE RECOGNITION ENGINE
+    // =========================================================================
+    let userWantsRecording = false;
+    let accumulatedFinalTranscript = '';
+    let currentInterimTranscript = '';
+
+    function isMobileDevice() {
+      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    }
+
+    function initSpeechRecognition() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        document.getElementById('micStatusText').textContent =
+          '음성 인식을 위해 Chrome(갤럭시) 또는 Safari(아이폰) 브라우저로 열어주세요.';
+      }
+    }
+
+    function startRecordingUI() {
+      isRecording = true;
+      const btn = document.getElementById('micButton');
+      btn.classList.add('mic-recording', 'from-rose-500', 'to-red-600');
+      btn.classList.remove('from-indigo-500', 'to-violet-600');
+      document.getElementById('micBtnLabel').textContent = '⏹️ 다시 눌러 종료';
+      document.getElementById('micStatusText').innerHTML =
+        '<span class="text-rose-400 font-bold">🔴 녹음 중... 다 말한 뒤 마이크를 다시 한 번 누르면 종료·채점됩니다!</span>';
+    }
+
+    function stopRecordingUI() {
+      isRecording = false;
+      userWantsRecording = false;
+      const btn = document.getElementById('micButton');
+      btn.classList.remove('mic-recording', 'from-rose-500', 'to-red-600');
+      btn.classList.add('from-indigo-500', 'to-violet-600');
+      document.getElementById('micBtnLabel').textContent = '한 번 눌러 시작';
+      document.getElementById('micStatusText').innerHTML =
+        '마이크를 <b>한 번 누르면 녹음 시작</b>, 다 말한 뒤 <b>다시 한 번 누르면 종료·채점</b>됩니다';
+    }
+
+    function createSpeechRecognitionInstance() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) return null;
+
+      const rec = new SpeechRec();
+      rec.lang = 'en-US';
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+      rec.continuous = true;
+
+      rec.onstart = () => {
+        startRecordingUI();
+      };
+
+      rec.onresult = (event) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const piece = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            accumulatedFinalTranscript += (accumulatedFinalTranscript ? ' ' : '') + piece.trim();
+          } else {
+            interim += piece;
+          }
+        }
+        currentInterimTranscript = interim.trim();
+        const combined = [accumulatedFinalTranscript, currentInterimTranscript].filter(Boolean).join(' ').trim();
+        if (combined) {
+          setVoiceTranscriptText(combined, false);
+        }
+      };
+
+      rec.onerror = (event) => {
+        const err = event.error || '';
+        if (err === 'no-speech' || err === 'aborted') {
+          // 숨 고르기 중이거나 정상 종료 시에는 오류 메시지를 띄우지 않음
+          return;
+        }
+        stopRecordingUI();
+        if (/KAKAOTALK/i.test(navigator.userAgent || '')) {
+          document.getElementById('inAppBrowserBanner').classList.remove('hidden');
+          showToast('카카오톡 내부 브라우저입니다. 상단 버튼을 눌러 Chrome/Safari로 열어주세요!');
+        } else {
+          showToast(`음성 인식 안내 (${err}): 마이크 버튼을 다시 한 번 눌러 말씀해 주세요.`);
+        }
+      };
+
+      rec.onend = () => {
+        // 사용자가 아직 두 번째 터치(종료)를 하지 않았으면 연속 듣기 재시작 시도
+        if (userWantsRecording) {
+          try {
+            rec.start();
+            return;
+          } catch (e) {
+            // 모바일 브라우저 정책상 자동 재시작이 막힌 경우 현재까지 말한 문장으로 즉시 채점
+          }
+        }
+        stopRecordingUI();
+        const spoken = document.getElementById('userSpokenInput').value.trim();
+        if (spoken && prefs.autoEvaluate) {
+          evaluateUserAnswer();
+        }
+      };
+
+      return rec;
+    }
+
+    function stopSpeechRecognitionIfActive() {
+      userWantsRecording = false;
+      if (recognition) {
+        try { recognition.abort(); } catch (e) {}
+      }
+      stopRecordingUI();
+    }
+
+    // ★ 반드시 동기(Synchronous) 함수로 실행되어야 모바일 브라우저에서 마이크가 차단되지 않습니다! ★
+    function toggleSpeechRecognition() {
+      // 이미 녹음 중인 상태에서 마이크를 다시 한 번 누른 경우 → 녹음 종료 & 즉시 채점!
+      if (userWantsRecording || isRecording) {
+        userWantsRecording = false;
+        if (recognition) {
+          try { recognition.stop(); } catch (e) {}
+        }
+        stopRecordingUI();
+        const spoken = document.getElementById('userSpokenInput').value.trim();
+        if (spoken) {
+          evaluateUserAnswer();
+        } else {
+          showToast('녹음이 종료되었습니다. 다시 눌러 영어로 말씀해 주세요.');
+        }
+        return;
+      }
+
+      if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
+
+      accumulatedFinalTranscript = '';
+      currentInterimTranscript = '';
+      setVoiceTranscriptText('', true);
+      document.getElementById('feedbackCard').classList.add('hidden');
+
+      recognition = createSpeechRecognitionInstance();
+      if (!recognition) {
+        if (/KAKAOTALK/i.test(navigator.userAgent || '')) {
+          document.getElementById('inAppBrowserBanner').classList.remove('hidden');
+          openInExternalBrowser();
+        } else {
+          showToast('이 브라우저에서는 음성 인식이 지원되지 않습니다. Chrome 또는 Safari로 열어주세요!');
+        }
+        return;
+      }
+
+      userWantsRecording = true;
+      startRecordingUI();
+      try {
+        recognition.start();
+      } catch (e) {
+        stopRecordingUI();
+        showToast('마이크를 다시 한 번 가볍게 눌러주세요.');
+      }
+    }
+
+    function speakText(text, lang = 'en-US') {
+      if (!('speechSynthesis' in window)) {
+        showToast('이 기기에서 음성 출력(TTS)을 지원하지 않습니다.');
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = lang;
+      utter.rate = lang.startsWith('en') ? Number(prefs.ttsRate || 0.92) : 1.0;
+      window.speechSynthesis.speak(utter);
+    }
+
+    function speakKoreanPrompt() {
+      const item = getCurrentQuizItem();
+      if (item) speakText(item.korean, 'ko-KR');
+    }
+
+    function speakTargetAnswer() {
+      const item = getCurrentQuizItem();
+      if (item) speakText(item.english, 'en-US');
+    }
+
+    function speakBonusSentence() {
+      if (currentBonusEnglish) speakText(currentBonusEnglish, 'en-US');
+    }
+
+    // =========================================================================
+    // 7. ACCURACY SCORING, WORD-BY-WORD DIFF & 4-STEP COACHING ENGINE
+    // =========================================================================
+    function normalizeWord(w) {
+      let clean = String(w || '')
+        .toLowerCase()
+        .replace(/[.,!?;:"'’”()]/g, '')
+        .replace(/^café$/, 'cafe')
+        .replace(/^cafés$/, 'cafes')
+        .trim();
+      if (COMMON_TYPOS[clean]) clean = COMMON_TYPOS[clean];
+      return clean;
+    }
+
+    function expandContractionsInText(sentence) {
+      return sentence
+        .replace(/\bthat's\b/gi, 'that is')
+        .replace(/\bthat’s\b/gi, 'that is')
+        .replace(/\bi'm\b/gi, 'i am')
+        .replace(/\bi’m\b/gi, 'i am')
+        .replace(/\bi've\b/gi, 'i have')
+        .replace(/\bi’ve\b/gi, 'i have')
+        .replace(/\bdon't\b/gi, 'do not')
+        .replace(/\bdoesn't\b/gi, 'does not')
+        .replace(/\bdidn't\b/gi, 'did not')
+        .replace(/\bcan't\b/gi, 'cannot');
+    }
+
+    function tokenizeSentence(sentence) {
+      return String(sentence || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(raw => ({ raw, norm: normalizeWord(raw) }))
+        .filter(t => t.norm.length > 0);
+    }
+
+    function areWordsEquivalent(w1, w2) {
+      if (w1 === w2) return true;
+      if (w1.length >= 5 && w2.length >= 5 && Math.abs(w1.length - w2.length) <= 1) {
+        let dist = 0;
+        let i = 0, j = 0;
+        while (i < w1.length && j < w2.length) {
+          if (w1[i] === w2[j]) { i++; j++; }
+          else {
+            dist++;
+            if (dist > 1) return false;
+            if (w1.length > w2.length) i++;
+            else if (w2.length > w1.length) j++;
+            else { i++; j++; }
+          }
+        }
+        dist += (w1.length - i) + (w2.length - j);
+        if (dist <= 1) return true;
+      }
+      return false;
+    }
+
+    function computeWordAlignment(targetTokens, userTokens) {
+      const m = targetTokens.length;
+      const n = userTokens.length;
+      const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+
+      for (let i = m - 1; i >= 0; i--) {
+        for (let j = n - 1; j >= 0; j--) {
+          if (areWordsEquivalent(targetTokens[i].norm, userTokens[j].norm)) {
+            dp[i][j] = 1 + dp[i + 1][j + 1];
+          } else {
+            dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+          }
+        }
+      }
+
+      const ops = [];
+      let i = 0, j = 0;
+      while (i < m && j < n) {
+        if (areWordsEquivalent(targetTokens[i].norm, userTokens[j].norm)) {
+          ops.push({ type: 'match', target: targetTokens[i], user: userTokens[j] });
+          i++; j++;
+        } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+          ops.push({ type: 'missing', target: targetTokens[i] });
+          i++;
+        } else {
+          ops.push({ type: 'extra', user: userTokens[j] });
+          j++;
+        }
+      }
+      while (i < m) ops.push({ type: 'missing', target: targetTokens[i++] });
+      while (j < n) ops.push({ type: 'extra', user: userTokens[j++] });
+
+      const matchedCount = ops.filter(o => o.type === 'match').length;
+      const denom = Math.max(m, n, 1);
+      const accuracy = Math.round((matchedCount / denom) * 100);
+
+      return { ops, matchedCount, targetCount: m, userCount: n, accuracy };
+    }
+
+    function analyzeBuiltInDiagnostics(item, userRaw, alignment) {
+      const targetRaw = item.english.trim();
+      const targetLower = targetRaw.toLowerCase();
+      const userLower = userRaw.trim().toLowerCase();
+      const missingWords = alignment.ops.filter(o => o.type === 'missing').map(o => o.target.raw);
+      const extraWords = alignment.ops.filter(o => o.type === 'extra').map(o => o.user.raw);
+
+      let lackingPoints = [];
+      let fixPoints = [];
+      let whyPoints = [];
+
+      if (alignment.accuracy === 100) {
+        lackingPoints.push('부족한 부분 없이 목표 문장의 모든 어휘와 어순을 100% 정확하게 말씀하셨습니다!');
+        fixPoints.push(`교정할 필요가 없습니다. 지금처럼 "${targetRaw}"을 자연스러운 억양으로 한 호흡에 말해보세요.`);
+        whyPoints.push(
+          item.patternNote
+            ? `핵심 패턴 포인트: ${item.patternNote}`
+            : `패턴 "${item.patternTitle}"의 구조와 동사·전치사 결합이 완벽하게 지켜졌습니다.`
+        );
+      } else {
+        if (targetLower.includes('has become')) {
+          if (userLower.includes('have become')) {
+            lackingPoints.push(`동명사 주어 뒤에 복수 동사 'have become'을 사용하셨습니다.`);
+            fixPoints.push(`"have become" → "has become"으로 단수 동사(has)를 써주세요.`);
+            whyPoints.push(`'working out', 'listening to music', 'going to cafes'처럼 동명사(V-ing)구가 문장의 주어일 때는 항상 단수 취급하므로 'have'가 아닌 'has become'이 와야 합니다!`);
+          } else if (!userLower.includes('has become') && userLower.includes('became')) {
+            lackingPoints.push(`현재완료('has become') 대신 단순과거('became')로 말씀하셨습니다.`);
+            fixPoints.push(`"became" → "has become"으로 현재완료 시제를 살려주세요.`);
+            whyPoints.push(`과거부터 지금까지 이어져 현재 내 삶의 중요한 부분이 되었다는 결과를 강조할 때는 현재완료(has + p.p.)인 'has become'을 쓰는 것이 훨씬 자연스럽습니다.`);
+          }
+        }
+
+        if (targetLower.includes('enjoy ')) {
+          const enjoyToMatch = userLower.match(/enjoy\s+to\s+([a-z]+)/);
+          const targetIngMatch = targetLower.match(/enjoy\s+([a-z]+ing)/);
+          if (enjoyToMatch && targetIngMatch) {
+            lackingPoints.push(`'enjoy' 뒤에 to부정사("enjoy to ${enjoyToMatch[1]}")를 사용하셨습니다.`);
+            fixPoints.push(`"enjoy to ${enjoyToMatch[1]}" → "enjoy ${targetIngMatch[1]}"으로 고쳐야 합니다.`);
+            whyPoints.push(`동사 'enjoy'는 목적어로 동명사(-ing)만 취하는 대표 동사입니다. (enjoy + V-ing: ~하는 것을 즐기다)`);
+          }
+        }
+
+        if (targetLower.includes('listening to') && userLower.includes('listening') && !userLower.includes('listening to')) {
+          lackingPoints.push(`'listening' 뒤에 전치사 'to'가 빠졌습니다.`);
+          fixPoints.push(`"listening music" → "listening to music"으로 전치사 'to'를 꼭 넣어주세요.`);
+          whyPoints.push(`'listen'은 자동사이므로 목적어(music)를 바로 받을 수 없고, 반드시 전치사 'to'와 함께 'listen to + 명사'로 써야 합니다.`);
+        }
+
+        if (lackingPoints.length === 0) {
+          if (missingWords.length > 0 && extraWords.length > 0) {
+            lackingPoints.push(`목표 문장에서 [${missingWords.join(', ')}] 표현 대신 [${extraWords.join(', ')}](으)로 다르게 표현되거나 발음이 오인식되었습니다.`);
+          } else if (missingWords.length > 0) {
+            lackingPoints.push(`목표 문장에서 [${missingWords.join(', ')}] 단어가 누락되었습니다.`);
+          } else if (extraWords.length > 0) {
+            lackingPoints.push(`불필요한 단어 [${extraWords.join(', ')}]가 추가되었습니다.`);
+          }
+        }
+
+        if (fixPoints.length === 0) {
+          fixPoints.push(`"${userRaw}" → "${targetRaw}"으로 교정해서 다시 한 번 입으로 소리 내어 읽어보세요.`);
+        }
+
+        if (whyPoints.length === 0) {
+          whyPoints.push(
+            item.patternNote
+              ? `${item.patternNote} — 패턴 뼈대("${item.patternTitle}")를 한 덩어리로 입에 붙여두면 실전에서 훨씬 유창하게 들립니다.`
+              : `오픽 시험에서는 외운 패턴("${item.patternTitle}")의 뼈대를 흔들림 없이 한 호흡으로 말해야 긴장해도 문법 실수가 줄어듭니다.`
+          );
+        }
+      }
+
+      let bonusSentence = 'Honestly, I cannot imagine my daily routine without it.';
+      let bonusKo = '솔직히 그것 없는 제 일상은 상상할 수도 없어요.';
+      if (targetLower.includes('working out')) {
+        bonusSentence = 'It keeps me healthy and gives me a lot of energy every day.';
+        bonusKo = '운동 덕분에 건강도 유지하고 매일 큰 에너지를 얻고 있어요.';
+      } else if (targetLower.includes('music')) {
+        bonusSentence = 'Listening to my favorite songs really helps me relieve stress.';
+        bonusKo = '좋아하는 노래를 들으면 스트레스가 확 풀려요.';
+      } else if (targetLower.includes('cafe')) {
+        bonusSentence = 'I love drinking a cup of iced Americano in a quiet atmosphere.';
+        bonusKo = '조용한 분위기에서 아이스 아메리카노 한 잔 마시는 걸 정말 좋아해요.';
+      } else if (targetLower.includes('movie')) {
+        bonusSentence = 'It allows me to fully focus on the story without any distractions.';
+        bonusKo = '방해받지 않고 줄거리에 온전히 집중할 수 있어서 좋아요.';
+      }
+
+      return {
+        score: alignment.accuracy,
+        lacking: lackingPoints.join(' '),
+        howToFix: fixPoints.join(' '),
+        why: whyPoints.join(' '),
+        bonusEnglish: bonusSentence,
+        bonusKorean: bonusKo
+      };
+    }
+
+    async function evaluateUserAnswer() {
+      const item = getCurrentQuizItem();
+      if (!item) return;
+
+      const userRaw = document.getElementById('userSpokenInput').value.trim();
+      if (!userRaw) {
+        showToast('먼저 마이크 버튼을 누르고 영어로 문장을 말해주세요!');
+        return;
+      }
+
+      const rawAlign = computeWordAlignment(tokenizeSentence(item.english), tokenizeSentence(userRaw));
+      const expAlign = computeWordAlignment(
+        tokenizeSentence(expandContractionsInText(item.english)),
+        tokenizeSentence(expandContractionsInText(userRaw))
+      );
+      const alignment = expAlign.accuracy > rawAlign.accuracy ? expAlign : rawAlign;
+
+      const builtIn = analyzeBuiltInDiagnostics(item, userRaw, alignment);
+      updateSentenceStats(item.patternId, item.sentenceId, alignment.accuracy);
+      renderSentenceStepPills();
+      renderFeedbackUI(item, userRaw, alignment, builtIn, false);
+
+      const apiKey = (localStorage.getItem(STORAGE_KEY_API) || '').trim();
+      if (apiKey) {
+        const evalBtn = document.getElementById('evaluateBtn');
+        const origHtml = evalBtn.innerHTML;
+        evalBtn.innerHTML = '<span>🤖 Gemini AI 정밀 첨삭 분석 중...</span>';
+        evalBtn.disabled = true;
+        try {
+          const aiResult = await fetchGeminiCoaching(apiKey, item, userRaw, alignment.accuracy);
+          if (aiResult) {
+            renderFeedbackUI(item, userRaw, alignment, {
+              score: typeof aiResult.score === 'number' ? aiResult.score : alignment.accuracy,
+              lacking: aiResult.lacking || builtIn.lacking,
+              howToFix: aiResult.howToFix || builtIn.howToFix,
+              why: aiResult.why || builtIn.why,
+              bonusEnglish: aiResult.bonusEnglish || builtIn.bonusEnglish,
+              bonusKorean: aiResult.bonusKorean || builtIn.bonusKorean
+            }, true);
+          }
+        } catch (err) {
+          console.warn('Gemini fallback:', err);
+        } finally {
+          evalBtn.innerHTML = origHtml;
+          evalBtn.disabled = false;
+        }
+      }
+    }
+
+    function updateSentenceStats(patternId, sentenceId, score) {
+      const pat = patterns.find(p => p.id === patternId);
+      if (!pat) return;
+      const sent = pat.sentences.find(s => s.id === sentenceId);
+      if (!sent) return;
+      sent.attempts = (sent.attempts || 0) + 1;
+      sent.bestScore = Math.max(sent.bestScore || 0, score);
+      savePatterns();
+    }
+
+    function renderFeedbackUI(item, userRaw, alignment, coaching, isAiEnhanced) {
+      const card = document.getElementById('feedbackCard');
+      card.classList.remove('hidden');
+
+      const score = coaching.score;
+      document.getElementById('feedbackScoreText').textContent = `${score}%`;
+      document.getElementById('feedbackTargetSentence').textContent = item.english;
+
+      const badge = document.getElementById('feedbackBadge');
+      const headline = document.getElementById('feedbackHeadline');
+
+      if (score >= 95) {
+        badge.textContent = isAiEnhanced ? 'PERFECT · AI 검증 완료' : 'PERFECT · 완벽 일치';
+        badge.className = 'inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mb-1';
+        headline.textContent = '완벽합니다! 원어민처럼 정확하게 말했어요 🎉';
+      } else if (score >= 75) {
+        badge.textContent = isAiEnhanced ? 'ALMOST THERE · AI 첨삭' : 'ALMOST THERE · 거의 정답';
+        badge.className = 'inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 mb-1';
+        headline.textContent = '아주 잘했어요! 작은 디테일만 다듬어볼까요?';
+      } else {
+        badge.textContent = isAiEnhanced ? 'KEEP GOING · AI 교정' : 'KEEP GOING · 교정 필요';
+        badge.className = 'inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 mb-1';
+        headline.textContent = '패턴 구조를 확인하고 다시 입에 붙여봐요!';
+      }
+
+      const diffHtml = alignment.ops.map(op => {
+        if (op.type === 'match') {
+          return `<span class="inline-block px-1.5 py-0.5 m-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">${escapeHtml(op.target.raw)}</span>`;
+        } else if (op.type === 'missing') {
+          return `<span class="inline-block px-1.5 py-0.5 m-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 underline decoration-wavy" title="누락된 단어">+${escapeHtml(op.target.raw)}</span>`;
+        } else {
+          return `<span class="inline-block px-1.5 py-0.5 m-0.5 rounded bg-amber-500/20 text-amber-300 line-through border border-amber-500/30" title="잘못 말한 단어">${escapeHtml(op.user.raw)}</span>`;
+        }
+      }).join(' ');
+
+      document.getElementById('wordDiffContainer').innerHTML =
+        diffHtml +
+        `<div class="mt-2 flex flex-wrap gap-2 text-[10px] text-slate-400">
+          <span><b class="text-emerald-400">초록색</b>: 정확히 말한 단어</span>
+          <span><b class="text-rose-400">+빨간색</b>: 빠뜨린 단어</span>
+          <span><b class="text-amber-400">취소선</b>: 잘못 말한 단어</span>
+        </div>`;
+
+      document.getElementById('feedbackLacking').textContent = coaching.lacking;
+      document.getElementById('feedbackHowToFix').textContent = coaching.howToFix;
+      document.getElementById('feedbackWhy').textContent = coaching.why;
+
+      currentBonusEnglish = coaching.bonusEnglish || '';
+      document.getElementById('feedbackBonusText').innerHTML =
+        `<span class="font-bold text-white">"${escapeHtml(coaching.bonusEnglish)}"</span><br/>` +
+        `<span class="text-slate-400 text-[11px]">(${escapeHtml(coaching.bonusKorean)})</span>`;
+
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    async function fetchGeminiCoaching(apiKey, item, userRaw, baseScore) {
+      const prompt = `당신은 친절하고 핵심을 잘 짚어주는 오픽(OPIc) 전문 영어 스피킹 코치입니다.
+학습자가 외우고 있는 패턴과 목표 문장, 출제된 한국어 문제, 그리고 학습자가 실제로 말한 영어 문장은 다음과 같습니다.
+
+- 학습 패턴: ${item.patternTitle}
+- 한국어 문제: ${item.korean}
+- 목표 정답 문장: ${item.english}
+- 학습자가 말한 문장: ${userRaw}
+- 1차 단어 일치율: ${baseScore}%
+
+다음 4가지를 한국어로 간결하고 명확하게 분석하여 반드시 JSON 형식으로만 응답하세요:
+1. score: 의미와 문법, 목표 패턴 부합도를 종합한 점수 (0~100 숫자)
+2. lacking: 목표 문장 대비 무엇이 부족했는지 (1~2문장)
+3. howToFix: 어떻게 고쳐서 말해야 하는지 구체적인 교정 가이드 (1~2문장)
+4. why: 왜 그렇게 고쳐야 하는지 문법적·어법적 이유 설명 (1~2문장)
+5. bonusEnglish: 이 문장 바로 뒤에 이어 말하면 오픽 IH/AL 등급을 받을 수 있는 자연스러운 영어 꼬리 문장 1개
+6. bonusKorean: bonusEnglish의 자연스러운 한국어 뜻`;
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.25 }
+          })
+        }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      return JSON.parse(text);
+    }
+
+    // =========================================================================
+    // 8. MULTI-PATTERN INPUT PREVIEW & BATCH SAVE (TAB 2)
+    // =========================================================================
+    function fillSampleMultiPaste() {
+      document.getElementById('smartPasteInput').value =
+`패턴 19: 저는 혼자 ~하는 것을 정말 즐겨요. / I really enjoy ~ alone.
+* 영화 / I really enjoy watching movies alone.
+* 음악 / I really enjoy listening to mosic alone.
+* 카페 / I really enjoy going to a cafe alone.
+
+패턴 20: 그것이 바로 ~가 제 삶의 중요한 부분이 된 이유입니다. / That's why ~ has become an important part of my life
+* 운동 / That's why working out has becaome an important part of my life
+* 음악감상 / That's why listening to music has becaome an important part of my life
+* 카페방문/ That's why going to cafes has becaome an important part of my life`;
+      parseMultiPatternsAndPreview(true);
+    }
+
+    let liveParseTimer = null;
+    function onSmartPasteLiveInput() {
+      clearTimeout(liveParseTimer);
+      liveParseTimer = setTimeout(() => {
+        parseMultiPatternsAndPreview(false);
+      }, 350);
+    }
+
+    async function parseMultiPatternsAndPreview(showToastNotification = true) {
+      const raw = document.getElementById('smartPasteInput').value.trim();
+      if (!raw) {
+        previewParsedPatterns = [];
+        renderMultiPatternPreview([]);
+        if (showToastNotification) showToast('먼저 외울 패턴과 문장을 붙여넣어 주세요!');
+        return;
+      }
+
+      const { patternsList, allTypoFixes } = parseMultiplePatternsSync(raw);
+
+      const typoBox = document.getElementById('typoAlertBox');
+      const typoList = document.getElementById('typoAlertList');
+      if (allTypoFixes.length > 0) {
+        typoBox.classList.remove('hidden');
+        typoList.innerHTML = allTypoFixes
+          .map(t => `<div>• 오타 자동 보정: <span class="font-bold text-white">${escapeHtml(t)}</span></div>`)
+          .join('');
+      } else {
+        typoBox.classList.add('hidden');
+      }
+
+      for (const pat of patternsList) {
+        for (const s of pat.sentences) {
+          if (!s.korean) {
+            s.korean = await translateEnglishToKoreanNatural(s.english, s.keyword, pat.koreanTemplate);
+          }
+        }
+      }
+
+      previewParsedPatterns = patternsList;
+      renderMultiPatternPreview(patternsList);
+
+      if (showToastNotification) {
+        const totalSent = patternsList.reduce((a, p) => a + p.sentences.length, 0);
+        showToast(`총 ${patternsList.length}개의 패턴 (${totalSent}개 문장)으로 자동 분리되었습니다! ✨`);
+      }
+    }
+
+    function renderMultiPatternPreview(patternsList) {
+      const titleEl = document.getElementById('previewCountTitle');
+      const container = document.getElementById('multiPatternCardsContainer');
+
+      if (!patternsList || patternsList.length === 0) {
+        titleEl.textContent = '📋 위 입력창에 여러 패턴을 붙여넣으면 여기에 패턴별로 나뉘어 표시됩니다.';
+        container.innerHTML = '';
+        return;
+      }
+
+      const totalSent = patternsList.reduce((a, p) => a + p.sentences.length, 0);
+      titleEl.innerHTML = `✅ 총 <span class="text-emerald-400 font-extrabold">${patternsList.length}개 패턴</span> (<span class="text-white">${totalSent}개 문장</span>) 분리 완료 — 확인 후 [한 번에 모두 저장하기]를 누르세요!`;
+
+      container.innerHTML = patternsList.map((pat, pIdx) => {
+        const rowsHtml = pat.sentences.map((s, sIdx) => `
+          <div class="preview-sent-row bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 space-y-1.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-bold text-indigo-400">문장 #${sIdx + 1}</span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] text-slate-400">키워드:</span>
+                <input type="text" value="${escapeAttr(s.keyword)}"
+                  onchange="updatePreviewSentence(${pIdx}, ${sIdx}, 'keyword', this.value)"
+                  class="w-24 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs font-semibold text-emerald-300" />
+              </div>
+            </div>
+            <div>
+              <input type="text" value="${escapeAttr(s.english)}"
+                onchange="updatePreviewSentence(${pIdx}, ${sIdx}, 'english', this.value)"
+                class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs font-bold text-white" />
+            </div>
+            <div>
+              <input type="text" value="${escapeAttr(s.korean)}"
+                onchange="updatePreviewSentence(${pIdx}, ${sIdx}, 'korean', this.value)"
+                class="w-full bg-slate-900 border border-slate-700/80 rounded px-2.5 py-1.5 text-xs text-amber-200" />
+            </div>
+          </div>
+        `).join('');
+
+        return `
+          <div class="glass-card rounded-2xl p-4 space-y-3 border border-indigo-500/30">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span class="text-xs font-extrabold text-indigo-300">분리된 패턴 #${pIdx + 1} (${pat.sentences.length}문장)</span>
+              <button onclick="removePreviewPattern(${pIdx})" class="text-xs text-rose-400 hover:text-rose-300">제외 ✕</button>
+            </div>
+            <div class="space-y-1">
+              <label class="text-[11px] text-slate-400">핵심 영어 패턴</label>
+              <input type="text" value="${escapeAttr(pat.pattern)}"
+                onchange="updatePreviewPatternField(${pIdx}, 'pattern', this.value)"
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-extrabold text-white" />
+            </div>
+            <div class="space-y-1">
+              <label class="text-[11px] text-slate-400">패턴 한국어 뜻 / 번호</label>
+              <input type="text" value="${escapeAttr(pat.note || '')}"
+                onchange="updatePreviewPatternField(${pIdx}, 'note', this.value)"
+                class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-amber-200" />
+            </div>
+            <div class="space-y-2">${rowsHtml}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updatePreviewPatternField(pIdx, field, val) {
+      if (previewParsedPatterns[pIdx]) {
+        previewParsedPatterns[pIdx][field] = val.trim();
+      }
+    }
+
+    function updatePreviewSentence(pIdx, sIdx, field, val) {
+      if (previewParsedPatterns[pIdx]?.sentences?.[sIdx]) {
+        previewParsedPatterns[pIdx].sentences[sIdx][field] = val.trim();
+      }
+    }
+
+    function removePreviewPattern(pIdx) {
+      previewParsedPatterns.splice(pIdx, 1);
+      renderMultiPatternPreview(previewParsedPatterns);
+    }
+
+    async function saveAllParsedPatterns() {
+      const raw = document.getElementById('smartPasteInput').value.trim();
+      if (previewParsedPatterns.length === 0 && raw) {
+        await parseMultiPatternsAndPreview(false);
+      }
+
+      if (previewParsedPatterns.length === 0) {
+        showToast('먼저 패턴과 문장들을 입력창에 붙여넣어 주세요!');
+        return;
+      }
+
+      const addedCount = previewParsedPatterns.length;
+      const firstAddedId = previewParsedPatterns[0].id;
+
+      // 입력한 순서가 그대로 이어지도록 뒤에 추가 (번호가 있으면 자동 번호순 정렬)
+      patterns = [...patterns, ...previewParsedPatterns];
+      await reorganizeAllSavedPatterns(false);
+      resetAddForm();
+
+      setQuizOrderMode('seq');
+      const startSel = document.getElementById('quizStartPatternSelect');
+      const endSel = document.getElementById('quizEndPatternSelect');
+      if (startSel && [...startSel.options].some(o => o.value === firstAddedId)) {
+        startSel.value = firstAddedId;
+      }
+      if (endSel && patterns.length > 0) {
+        endSel.value = patterns[patterns.length - 1].id;
+        hasCustomEndPattern = false;
+      }
+      currentQuizIdx = 0;
+      buildQuizQueue();
+      renderCurrentQuestion();
+      switchTab('quiz');
+      showToast(`🎉 총 ${addedCount}개의 패턴이 각각 깔끔하게 분리되어 저장되었습니다!`);
+    }
+
+    function resetAddForm() {
+      document.getElementById('smartPasteInput').value = '';
+      document.getElementById('typoAlertBox').classList.add('hidden');
+      previewParsedPatterns = [];
+      renderMultiPatternPreview([]);
+    }
+
+    // =========================================================================
+    // 9. SENTENCE & PATTERN MANAGEMENT / DELETION (TAB 3)
+    // =========================================================================
+    function renderLibrary() {
+      const listEl = document.getElementById('patternLibraryList');
+      if (!patterns.length) {
+        listEl.innerHTML = `<div class="glass-card rounded-2xl p-6 text-center text-xs text-slate-400">저장된 패턴이 없습니다. [패턴 입력] 탭에서 새 패턴을 추가해보세요!</div>`;
+        return;
+      }
+
+      listEl.innerHTML = patterns.map((p, idx) => {
+        const sentencesHtml = p.sentences.map((s, sIdx) => {
+          const scoreBadge = s.attempts > 0
+            ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">최고 ${s.bestScore}%</span>`
+            : `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">미학습</span>`;
+          return `
+            <div class="bg-slate-950/70 border border-slate-800/90 rounded-xl p-3 flex items-start justify-between gap-2">
+              <div class="flex items-start gap-2.5 flex-1 min-w-0">
+                <input type="checkbox" data-pat-id="${p.id}" data-sent-id="${s.id}" class="sent-del-checkbox mt-1 w-4 h-4 accent-rose-500 rounded shrink-0" />
+                <div class="space-y-1 flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[10px] font-bold text-slate-400">문장 #${sIdx + 1}</span>
+                    <span class="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">${escapeHtml(s.keyword)}</span>
+                    ${scoreBadge}
+                  </div>
+                  <p class="text-xs font-bold text-white break-words">${escapeHtml(s.english)}</p>
+                  <p class="text-[11px] text-amber-200/90 break-words">${escapeHtml(s.korean)}</p>
+                </div>
+              </div>
+              <div class="flex flex-col gap-1 shrink-0">
+                <button onclick="speakText('${escapeJsStr(s.english)}', 'en-US')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs" title="발음 듣기">
+                  🔊
+                </button>
+                <button onclick="deleteSentenceById('${p.id}', '${s.id}')" class="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/50 text-[11px] font-bold" title="이 문장만 삭제">
+                  🗑️
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="glass-card rounded-2xl p-4 space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <span class="text-[10px] font-bold text-indigo-400 uppercase">PATTERN #${idx + 1} (${p.sentences.length}문장)</span>
+                <h3 class="text-sm font-extrabold text-white break-words">${escapeHtml(p.pattern)}</h3>
+                ${p.note ? `<p class="text-[11px] text-amber-300/90 mt-0.5 break-words">💡 ${escapeHtml(p.note)}</p>` : ''}
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button onclick="deletePattern('${p.id}')" class="text-xs px-2.5 py-1.5 rounded-lg bg-rose-950/70 hover:bg-rose-900 text-rose-300 border border-rose-800/60 font-bold">패턴 삭제</button>
+              </div>
+            </div>
+
+            <div class="space-y-2">${sentencesHtml}</div>
+
+            <div class="flex gap-2 pt-1">
+              <button onclick="playPatternSequentially('${p.id}')" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700">
+                🎧 연속 듣기
+              </button>
+              <button onclick="startQuizForPattern('${p.id}')" class="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">
+                📋 이 패턴 풀기
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function deleteSentenceById(patternId, sentenceId) {
+      const pIdx = patterns.findIndex(p => p.id === patternId);
+      if (pIdx === -1) return;
+
+      patterns[pIdx].sentences = patterns[pIdx].sentences.filter(s => s.id !== sentenceId);
+      if (patterns[pIdx].sentences.length === 0) {
+        patterns.splice(pIdx, 1);
+      }
+
+      savePatterns();
+      buildQuizQueue();
+      renderCurrentQuestion();
+      showToast('선택한 문장이 삭제되었습니다. 🗑️');
+    }
+
+    function deleteSelectedItems() {
+      const checked = [...document.querySelectorAll('.sent-del-checkbox:checked')];
+      if (checked.length === 0) {
+        showToast('먼저 삭제할 문장 왼쪽의 체크박스를 선택해주세요!');
+        return;
+      }
+      if (!confirm(`선택한 ${checked.length}개의 문장을 삭제할까요?`)) return;
+
+      const toDelete = new Set(checked.map(el => `${el.dataset.patId}::${el.dataset.sentId}`));
+      patterns.forEach(p => {
+        p.sentences = p.sentences.filter(s => !toDelete.has(`${p.id}::${s.id}`));
+      });
+      patterns = patterns.filter(p => p.sentences.length > 0);
+
+      savePatterns();
+      buildQuizQueue();
+      renderCurrentQuestion();
+      showToast(`${checked.length}개의 문장이 삭제되었습니다! 🗑️`);
+    }
+
+    function startQuizForPattern(patternId) {
+      setQuizOrderMode('seq');
+      const startSel = document.getElementById('quizStartPatternSelect');
+      const endSel = document.getElementById('quizEndPatternSelect');
+      if (startSel) startSel.value = patternId;
+      if (endSel) {
+        endSel.value = patternId;
+        hasCustomEndPattern = (endSel.selectedIndex !== patterns.length - 1);
+      }
+      currentQuizIdx = 0;
+      buildQuizQueue();
+      renderCurrentQuestion();
+      switchTab('quiz');
+    }
+
+    function playPatternSequentially(patternId) {
+      const pat = patterns.find(p => p.id === patternId);
+      if (!pat || !pat.sentences.length) return;
+      if (!('speechSynthesis' in window)) return;
+
+      window.speechSynthesis.cancel();
+      pat.sentences.forEach((s) => {
+        const koUtter = new SpeechSynthesisUtterance(s.korean);
+        koUtter.lang = 'ko-KR';
+        koUtter.rate = 1.0;
+
+        const enUtter = new SpeechSynthesisUtterance(s.english);
+        enUtter.lang = 'en-US';
+        enUtter.rate = Number(prefs.ttsRate || 0.92);
+
+        window.speechSynthesis.speak(koUtter);
+        window.speechSynthesis.speak(enUtter);
+      });
+      showToast('한국어 문제 → 영어 정답 순서로 연속 재생합니다 🎧');
+    }
+
+    function deletePattern(patternId) {
+      if (!confirm('이 패턴과 포함된 문장들을 모두 삭제할까요?')) return;
+      patterns = patterns.filter(p => p.id !== patternId);
+      savePatterns();
+      buildQuizQueue();
+      renderCurrentQuestion();
+      showToast('패턴이 삭제되었습니다.');
+    }
+
+    // =========================================================================
+    // 10. SETTINGS, API KEY & BACKUP (TAB 4)
+    // =========================================================================
+    async function saveAndTestApiKey() {
+      const key = document.getElementById('geminiApiKeyInput').value.trim();
+      const statusEl = document.getElementById('apiKeyTestResult');
+      if (!key) {
+        showToast('API 키를 입력해주세요.');
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY_API, key);
+      updateAiBadge();
+
+      statusEl.textContent = '⏳ Gemini API 연결 확인 중...';
+      statusEl.className = 'text-xs text-amber-300';
+
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: 'Say OK' }] }]
+            })
+          }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        statusEl.textContent = '✅ 연결 성공! 이제 Gemini AI 정밀 첨삭이 작동합니다.';
+        statusEl.className = 'text-xs text-emerald-400 font-semibold';
+        showToast('Gemini AI 연결이 완료되었습니다!');
+      } catch (e) {
+        statusEl.textContent = '❌ API 키 확인 실패. 키가 정확한지 확인해주세요. (내장 첨삭은 정상 작동합니다)';
+        statusEl.className = 'text-xs text-rose-400';
+      }
+    }
+
+    function clearApiKey() {
+      localStorage.removeItem(STORAGE_KEY_API);
+      document.getElementById('geminiApiKeyInput').value = '';
+      document.getElementById('apiKeyTestResult').textContent = 'API 키가 삭제되었습니다. (내장 문법 첨삭 모드로 동작)';
+      document.getElementById('apiKeyTestResult').className = 'text-xs text-slate-400';
+      updateAiBadge();
+      showToast('API 키가 삭제되었습니다.');
+    }
+
+    function savePreferences() {
+      prefs.autoEvaluate = document.getElementById('autoEvaluateToggle').checked;
+      prefs.ttsRate = Number(document.getElementById('ttsRateSelect').value || 0.92);
+      localStorage.setItem(STORAGE_KEY_PREFS, JSON.stringify(prefs));
+      showToast('설정이 저장되었습니다.');
+    }
+
+    function copyBackupToClipboard() {
+      const dataStr = JSON.stringify(patterns);
+      navigator.clipboard.writeText(dataStr).then(() => {
+        showToast('모든 패턴 데이터가 복사되었습니다! 카카오톡 나에게 보내기로 스마트폰에 붙여넣으세요.');
+      }).catch(() => {
+        prompt('아래 텍스트를 복사하세요:', dataStr);
+      });
+    }
+
+    function pasteBackupFromPrompt() {
+      const raw = prompt('복사해둔 백업 JSON 데이터를 여기에 붙여넣어 주세요:');
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) throw new Error('Invalid format');
+        patterns = parsed;
+        reorganizeAllSavedPatterns(true);
+      } catch (e) {
+        alert('올바른 백업 데이터 형식이 아닙니다.');
+      }
+    }
+
+    function exportBackupJson() {
+      const blob = new Blob([JSON.stringify(patterns, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `opic-patterns-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importBackupJson(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (!Array.isArray(parsed)) throw new Error('Invalid');
+          patterns = parsed;
+          reorganizeAllSavedPatterns(true);
+        } catch (err) {
+          alert('파일 형식이 올바르지 않습니다.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function resetToDefaultPatterns() {
+      if (!confirm('기본 샘플 패턴 상태로 초기화할까요?')) return;
+      patterns = JSON.parse(JSON.stringify(DEFAULT_PATTERNS));
+      savePatterns();
+      buildQuizQueue();
+      renderCurrentQuestion();
+      showToast('초기 샘플 데이터로 복원되었습니다.');
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+    function escapeAttr(str) {
+      return escapeHtml(str).replace(/'/g, '&#39;');
+    }
+    function escapeJsStr(str) {
+      return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+  </script>
+</body>
+</html>
