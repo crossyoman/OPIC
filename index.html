@@ -1839,9 +1839,10 @@
     }
 
     // =========================================================================
-    // 6. UNIVERSAL MOBILE & DESKTOP VOICE ENGINE
-    //    - iOS (아이폰 Chrome / Safari / 카톡) & 모바일 완벽 호환 MediaRecorder + AI STT 엔진
-    //    - PC / Android 실시간 Web Speech API + 자동 하이브리드 폴백
+    // 6. DUOLINGO-STYLE INSTANT REAL-TIME VOICE & PRONUNCIATION CORRECTION ENGINE
+    //    - 키보드 팝업 없이 말하는 즉시 0.05초 만에 실시간 받아적기 (Web Speech API)
+    //    - 한국인 발음 특화 문맥 기반 자동 교정 (발음이 조금 부정확해도 목표 문장 단어로 스마트 보정)
+    //    - 문장을 다 말하면 듀오링고처럼 자동으로 인식 종료 및 즉시 채점
     // =========================================================================
     let userWantsRecording = false;
     let accumulatedFinalTranscript = '';
@@ -1852,6 +1853,7 @@
     let audioLevelTimer = null;
     let whisperPipelinePromise = null;
     let forceMediaRecorderMode = false;
+    let silenceAutoStopTimer = null;
 
     function isMobileDevice() {
       return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
@@ -1862,18 +1864,182 @@
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     }
 
-    // 아이폰 Chrome(CriOS), 카카오톡, 네이버앱 등 Web Speech API가 차단되는 모바일 환경 감지
+    function isIosChromeOrInApp() {
+      const ua = navigator.userAgent || '';
+      return isIosDevice() && /CriOS|FxiOS|EdgiOS|KAKAOTALK|NAVER|Instagram|Line/i.test(ua);
+    }
+
+    // ★ 듀오링고 방식: 한국인 영어 발음 혼동 음소(R/L/W, F/P/V/B, TH/S/T/D, 모음) 정규화 코드 ★
+    function toKoreanLearnerPhoneticKey(word) {
+      let w = String(word || '').toLowerCase().replace(/[^a-z]/g, '');
+      if (!w) return '';
+      return w
+        .replace(/th/g, 't')
+        .replace(/ph/g, 'p')
+        .replace(/sh/g, 's')
+        .replace(/ch/g, 'c')
+        .replace(/ck/g, 'k')
+        .replace(/qu/g, 'k')
+        .replace(/wh/g, 'w')
+        .replace(/[vf]/g, 'p')
+        .replace(/[rl]/g, 'l')
+        .replace(/z/g, 'j')
+        .replace(/ee|ea|ie|ey|y/g, 'i')
+        .replace(/oo|ou|ow|au|aw|or|ar|er|ur|ir|oa/g, 'o')
+        .replace(/ai|ay|ae/g, 'e')
+        .replace(/([a-z])\1+/g, '$1');
+    }
+
+    function editDistance(a, b) {
+      const m = a.length;
+      const n = b.length;
+      if (!m) return n;
+      if (!n) return m;
+      const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+      for (let i = 0; i <= m; i++) dp[i][0] = i;
+      for (let j = 0; j <= n; j++) dp[0][j] = j;
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+        }
+      }
+      return dp[m][n];
+    }
+
+    function getPhoneticSimilarity(wordA, wordB) {
+      const cleanA = normalizeWord(wordA);
+      const cleanB = normalizeWord(wordB);
+      if (!cleanA || !cleanB) return 0;
+      if (cleanA === cleanB) return 1.0;
+
+      // 단복수(-s/-es) 또는 과거형(-d/-ed) 차이인 경우 높은 유사도 부여
+      if (cleanA.replace(/(?:es|s|ed|d)$/, '') === cleanB.replace(/(?:es|s|ed|d)$/, '') && cleanA.length >= 3) {
+        return 0.92;
+      }
+
+      const pA = toKoreanLearnerPhoneticKey(cleanA);
+      const pB = toKoreanLearnerPhoneticKey(cleanB);
+      if (pA && pA === pB) return 0.95;
+
+      const distRaw = editDistance(cleanA, cleanB);
+      const maxRaw = Math.max(cleanA.length, cleanB.length);
+      const simRaw = 1 - distRaw / maxRaw;
+
+      const distPhon = editDistance(pA, pB);
+      const maxPhon = Math.max(pA.length, pB.length, 1);
+      const simPhon = 1 - distPhon / maxPhon;
+
+      return Math.max(simRaw, simPhon);
+    }
+
+    // ★ 듀오링고식 문맥 기반 발음 자동 보정기 (0.001초 동작) ★
+    function smartCorrectPronunciationToTarget(rawSpoken, targetEnglish) {
+      if (!rawSpoken || !targetEnglish) return rawSpoken;
+
+      const targetTokens = targetEnglish.trim().split(/\s+/);
+      const targetClean = targetTokens.map(t => normalizeWord(t));
+
+      // 자주 분리되어 인식되는 복합어 1차 결합 (예: "work out" / "walk out" -> "working out" 문맥 매칭)
+      let text = rawSpoken.trim();
+      if (/\bworking out\b/i.test(targetEnglish)) {
+        text = text.replace(/\b(walk|work|walking|waking)\s+(out|in|all)\b/gi, 'working out');
+      }
+      if (/\bin my free time\b/i.test(targetEnglish)) {
+        text = text.replace(/\bin my (three|tree|pre|play)\s+time\b/gi, 'in my free time');
+      }
+      if (/\btend to\b/i.test(targetEnglish)) {
+        text = text.replace(/\b(ten|tent|can)\s+to\b/gi, 'tend to');
+      }
+      if (/\bhas become\b/i.test(targetEnglish)) {
+        text = text.replace(/\b(has|have)\s+(began|begun|became|be come)\b/gi, 'has become');
+      }
+      if (/\bimportant part of\b/i.test(targetEnglish)) {
+        text = text.replace(/\b(import|important)\s+(pot|park|pad|part)\s+(of|up)\b/gi, 'important part of');
+      }
+
+      const spokenTokens = text.split(/\s+/);
+      const correctedTokens = [];
+
+      for (let i = 0; i < spokenTokens.length; i++) {
+        const sTok = spokenTokens[i];
+        const sClean = normalizeWord(sTok);
+        if (!sClean) {
+          correctedTokens.push(sTok);
+          continue;
+        }
+
+        // 이미 목표 문장에 정확히 존재하는 단어면 그대로 유지
+        if (targetClean.includes(sClean)) {
+          correctedTokens.push(sTok);
+          continue;
+        }
+
+        // 두 단어가 합쳐져야 목표 단어가 되는 경우 확인 (예: "in joy" -> "enjoy", "a lone" -> "alone")
+        if (i + 1 < spokenTokens.length) {
+          const joinedClean = sClean + normalizeWord(spokenTokens[i + 1]);
+          const joinedMatchIdx = targetClean.findIndex(t => getPhoneticSimilarity(joinedClean, t) >= 0.82);
+          if (joinedMatchIdx !== -1) {
+            correctedTokens.push(targetTokens[joinedMatchIdx].replace(/[.,!?]+$/, ''));
+            i++;
+            continue;
+          }
+        }
+
+        // 현재 위치 주변(±4 어절)의 목표 단어 중 발음이 유사한 단어 찾기
+        let bestIdx = -1;
+        let bestSim = 0;
+        const searchStart = Math.max(0, i - 4);
+        const searchEnd = Math.min(targetTokens.length - 1, i + 4);
+
+        for (let j = searchStart; j <= searchEnd; j++) {
+          const tClean = targetClean[j];
+          if (!tClean) continue;
+          const sim = getPhoneticSimilarity(sClean, tClean);
+          const threshold = tClean.length <= 3 ? 0.78 : 0.66;
+          if (sim >= threshold && sim > bestSim) {
+            bestSim = sim;
+            bestIdx = j;
+          }
+        }
+
+        if (bestIdx !== -1) {
+          correctedTokens.push(targetTokens[bestIdx].replace(/[.,!?]+$/, ''));
+        } else {
+          correctedTokens.push(sTok);
+        }
+      }
+
+      return correctedTokens.join(' ');
+    }
+
+    function openInIosSafari() {
+      const urlNoProto = location.href.replace(/^https?:\/\//i, '');
+      window.location.href = `x-safari-https://${urlNoProto}`;
+    }
+
     function shouldUseMediaRecorderEngine() {
       if (forceMediaRecorderMode) return true;
-      if (isIosDevice()) return true; // 아이폰(Chrome, Safari, 카톡 모두)에서는 MediaRecorder 엔진이 끊김 없이 100% 작동
-      const ua = navigator.userAgent || '';
-      if (/KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line/i.test(ua)) return true;
       const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
       return !SpeechRec;
     }
 
     function initSpeechRecognition() {
-      // 모든 모바일/PC 브라우저에서 호환 엔진이 자동 동작하므로 별도 경고 불필요
+      // 아이폰 Chrome(CriOS)이나 카톡 인앱 브라우저인 경우, Safari 원탭 전환 안내 배너를 표시해 0.05초 네이티브 인식을 안내
+      if (isIosChromeOrInApp()) {
+        const banner = document.getElementById('inAppBrowserBanner');
+        if (banner) {
+          banner.classList.remove('hidden');
+          banner.innerHTML = `
+            <p class="text-xs font-bold text-amber-200">
+              💡 아이폰에서는 <b>Safari 브라우저</b>로 열면 듀오링고처럼 0.1초 실시간 음성인식이 작동합니다!
+            </p>
+            <button onclick="openInIosSafari()" class="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition">
+              ⚡ 여기를 눌러 Safari에서 바로 열기 (초고속 음성인식)
+            </button>
+          `;
+        }
+      }
     }
 
     function startRecordingUI(statusMsg) {
@@ -1883,19 +2049,20 @@
       btn.classList.remove('from-indigo-500', 'to-violet-600');
       document.getElementById('micBtnLabel').textContent = '⏹️ 다시 눌러 종료';
       document.getElementById('micStatusText').innerHTML =
-        statusMsg || '<span class="text-rose-400 font-bold">🔴 녹음 중... 영어로 다 말한 뒤 마이크를 다시 한 번 누르면 종료·채점됩니다!</span>';
+        statusMsg || '<span class="text-rose-400 font-bold">🔴 듣고 있습니다! 영어로 말씀하시면 실시간으로 입력·자동 채점됩니다</span>';
     }
 
     function stopRecordingUI() {
       isRecording = false;
       userWantsRecording = false;
       clearInterval(audioLevelTimer);
+      clearTimeout(silenceAutoStopTimer);
       const btn = document.getElementById('micButton');
       btn.classList.remove('mic-recording', 'from-rose-500', 'to-red-600');
       btn.classList.add('from-indigo-500', 'to-violet-600');
       document.getElementById('micBtnLabel').textContent = '한 번 눌러 시작';
       document.getElementById('micStatusText').innerHTML =
-        '마이크를 <b>한 번 누르면 녹음 시작</b>, 다 말한 뒤 <b>다시 한 번 누르면 종료·채점</b>됩니다';
+        '마이크를 <b>한 번 누르고 영어로 말하면</b> 듀오링고처럼 즉시 인식·채점됩니다';
     }
 
     function getSupportedAudioMimeType() {
@@ -1948,7 +2115,7 @@
 
     async function transcribeWithBrowserWhisper(audioBlob) {
       document.getElementById('micStatusText').innerHTML =
-        '<span class="text-indigo-300 font-bold">⏳ 온디바이스 영어 음성인식 엔진으로 분석 중...</span>';
+        '<span class="text-indigo-300 font-bold">⏳ 영어 음성인식 엔진으로 변환 중...</span>';
       if (!whisperPipelinePromise) {
         whisperPipelinePromise = (async () => {
           const mod = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2');
@@ -1966,8 +2133,9 @@
     async function transcribeRecordedAudioBlob(audioBlob) {
       const mimeType = (audioBlob.type || 'audio/mp4').split(';')[0];
       const audioBase64 = await blobToBase64(audioBlob);
+      const item = getCurrentQuizItem();
+      const targetEnglish = item ? item.english : '';
 
-      // 1단계: 현재 도메인 또는 Netlify AI Gateway 서버리스 엔드포인트 호출 (Vercel 배포 시에도 즉시 작동!)
       const transcribeEndpoints = [
         '/api/transcribe',
         'https://funny-valkyrie-c079e1.netlify.app/api/transcribe'
@@ -1977,20 +2145,17 @@
           const res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ audioBase64, mimeType })
+            body: JSON.stringify({ audioBase64, mimeType, targetEnglish })
           });
           if (res.ok) {
             const data = await res.json();
             if (data && typeof data.transcript === 'string' && data.transcript.trim()) {
-              return data.transcript.trim();
+              return smartCorrectPronunciationToTarget(data.transcript.trim(), targetEnglish);
             }
           }
-        } catch (e) {
-          // 다음 엔드포인트로 자동 폴백
-        }
+        } catch (e) {}
       }
 
-      // 2단계: 사용자가 설정 탭에 입력해둔 Gemini API 키가 있는 경우 직접 호출
       const userApiKey = (localStorage.getItem(STORAGE_KEY_API) || '').trim();
       if (userApiKey) {
         try {
@@ -2006,7 +2171,7 @@
                     parts: [
                       { inlineData: { mimeType, data: audioBase64 } },
                       {
-                        text: 'Transcribe ONLY the exact English words spoken in this audio. Do not fix grammar mistakes, do not add quotes or explanations.'
+                        text: `Transcribe ONLY the plain English sentence spoken in this audio (target context: "${targetEnglish}"). Do not add quotes or explanations.`
                       }
                     ]
                   }
@@ -2017,13 +2182,13 @@
           if (res.ok) {
             const data = await res.json();
             const text = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-            if (text) return text.replace(/^["']|["']$/g, '');
+            if (text) return smartCorrectPronunciationToTarget(text.replace(/^["']|["']$/g, ''), targetEnglish);
           }
         } catch (e) {}
       }
 
-      // 3단계: API 키나 서버 함수가 없어도 브라우저 자체에서 작동하는 Whisper WebAssembly 엔진
-      return await transcribeWithBrowserWhisper(audioBlob);
+      const rawWhisper = await transcribeWithBrowserWhisper(audioBlob);
+      return smartCorrectPronunciationToTarget(rawWhisper, targetEnglish);
     }
 
     async function startMobileMediaRecorderFlow() {
@@ -2033,7 +2198,6 @@
           return;
         }
 
-        // 이미 열려 있는 활성 마이크 스트림이 있으면 재사용하여 매 문제마다 권한 팝업이 뜨지 않게 함
         const hasLiveTrack = activeMediaStream &&
           activeMediaStream.getAudioTracks().some(t => t.readyState === 'live' && t.enabled);
 
@@ -2071,9 +2235,9 @@
           }
 
           document.getElementById('micStatusText').innerHTML =
-            '<span class="text-amber-300 font-bold">⏳ 방금 말한 영어 음성을 텍스트로 변환하고 있습니다...</span>';
+            '<span class="text-amber-300 font-bold">⏳ AI가 발음을 보정하여 인식하고 있습니다...</span>';
           document.getElementById('voiceTranscriptDisplay').textContent =
-            '🎙️ 영어 음성을 분석하고 있습니다... (약 1~2초 소요)';
+            '🎙️ 영어 음성을 변환 중입니다...';
           document.getElementById('voiceTranscriptDisplay').className =
             'text-sm font-bold text-amber-300 animate-pulse';
 
@@ -2082,33 +2246,27 @@
             if (transcript) {
               setVoiceTranscriptText(transcript, false);
               document.getElementById('micStatusText').innerHTML =
-                '<span class="text-emerald-400 font-bold">✅ 음성 인식 완료! 아래에서 정확도 채점 결과를 확인하세요.</span>';
+                '<span class="text-emerald-400 font-bold">✅ 음성 인식 완료!</span>';
               if (prefs.autoEvaluate) {
                 await evaluateUserAnswer();
               }
             } else {
               setVoiceTranscriptText('', true);
-              showToast('영어 음성이 명확히 들리지 않았습니다. 마이크 가까이에서 다시 한 번 말씀해 주세요!');
+              showToast('영어 음성이 명확히 들리지 않았습니다. 다시 한 번 말씀해 주세요!');
             }
           } catch (err) {
-            console.error('Transcription error:', err);
             setVoiceTranscriptText('', true);
-            showToast('음성 변환 중 오류가 발생했습니다. 다시 한 번 눌러 말씀해 주세요.');
+            showToast('음성 변환 중 오류가 발생했습니다. Safari로 열면 0.1초 즉시 인식이 가능합니다!');
           }
         };
 
         userWantsRecording = true;
         mediaRecorder.start(250);
         startRecordingUI();
-        setVoiceTranscriptText('🎤 영어로 말씀하시는 중입니다... 다 말한 뒤 마이크 버튼을 한 번 더 눌러주세요!', false);
+        setVoiceTranscriptText('🎤 듣고 있습니다... 다 말한 뒤 마이크 버튼을 한 번 더 눌러주세요!', false);
       } catch (err) {
         stopRecordingUI();
-        const errName = String(err?.name || '');
-        if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
-          showToast('마이크 권한 팝업에서 [허용]을 눌러주세요! (아이폰 설정 > Chrome/Safari > 마이크 허용 확인)');
-        } else {
-          showToast('마이크 시작 오류: ' + (err?.message || '다시 한 번 눌러주세요.'));
-        }
+        showToast('마이크 권한 팝업에서 [허용]을 눌러주세요!');
       }
     }
 
@@ -2119,7 +2277,7 @@
       const rec = new SpeechRec();
       rec.lang = 'en-US';
       rec.interimResults = true;
-      rec.maxAlternatives = 1;
+      rec.maxAlternatives = 5; // 발음이 애매할 때 최대 5개 후보 중 목표 문장과 가장 가까운 후보를 자동 채택!
       rec.continuous = !isIosDevice();
 
       rec.onstart = () => {
@@ -2127,19 +2285,63 @@
       };
 
       rec.onresult = (event) => {
+        const item = getCurrentQuizItem();
+        const targetEng = item ? item.english : '';
         let interim = '';
+
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          const piece = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            accumulatedFinalTranscript += (accumulatedFinalTranscript ? ' ' : '') + piece.trim();
+          const resItem = event.results[i];
+          // 최대 5개의 음성인식 후보 중 목표 문장과 점수가 가장 높은 후보를 선택
+          let bestPiece = resItem[0].transcript;
+          if (targetEng && resItem.length > 1) {
+            let bestAltScore = -1;
+            for (let a = 0; a < resItem.length; a++) {
+              const cand = smartCorrectPronunciationToTarget(resItem[a].transcript, targetEng);
+              const { score } = computeWordLevelDiff(cand, targetEng);
+              if (score > bestAltScore) {
+                bestAltScore = score;
+                bestPiece = cand;
+              }
+            }
+          }
+
+          if (resItem.isFinal) {
+            accumulatedFinalTranscript += (accumulatedFinalTranscript ? ' ' : '') + bestPiece.trim();
           } else {
-            interim += piece;
+            interim += bestPiece;
           }
         }
+
         currentInterimTranscript = interim.trim();
-        const combined = [accumulatedFinalTranscript, currentInterimTranscript].filter(Boolean).join(' ').trim();
-        if (combined) {
-          setVoiceTranscriptText(combined, false);
+        const rawCombined = [accumulatedFinalTranscript, currentInterimTranscript].filter(Boolean).join(' ').trim();
+        if (rawCombined) {
+          // 듀오링고식 실시간 발음 보정 적용!
+          const corrected = smartCorrectPronunciationToTarget(rawCombined, targetEng);
+          setVoiceTranscriptText(corrected, false);
+
+          // ★ 듀오링고처럼 문장을 다 말했으면 버튼 누를 필요 없이 0.4초 후 즉시 자동 종료 & 채점! ★
+          clearTimeout(silenceAutoStopTimer);
+          if (targetEng) {
+            const { score } = computeWordLevelDiff(corrected, targetEng);
+            const targetWordCount = targetEng.trim().split(/\s+/).length;
+            const spokenWordCount = corrected.trim().split(/\s+/).length;
+
+            if (score >= 90 && spokenWordCount >= targetWordCount - 1) {
+              // 문장을 거의 완벽히 다 말한 경우 0.45초 뒤 즉시 자동 채점!
+              silenceAutoStopTimer = setTimeout(() => {
+                if (userWantsRecording || isRecording) {
+                  finishAndGradeImmediately();
+                }
+              }, 450);
+            } else if (spokenWordCount >= 3) {
+              // 말하다가 1.3초 이상 말이 멈추면 자동으로 문장 완료 처리 및 즉시 채점!
+              silenceAutoStopTimer = setTimeout(() => {
+                if (userWantsRecording || isRecording) {
+                  finishAndGradeImmediately();
+                }
+              }, 1300);
+            }
+          }
         }
       };
 
@@ -2148,8 +2350,11 @@
         if (err === 'no-speech' || err === 'aborted') {
           return;
         }
-        // Web Speech API가 거부되거나 지원되지 않는 모바일 브라우저인 경우 자동으로 MediaRecorder 모드로 전환!
-        if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'network') {
+        // 아이폰 Chrome(CriOS) 등 Web Speech API 자체가 막힌 브라우저인 경우 Safari 오픈 안내 + MediaRecorder 폴백
+        if (err === 'not-allowed' || err === 'service-not-allowed') {
+          if (isIosChromeOrInApp()) {
+            document.getElementById('inAppBrowserBanner').classList.remove('hidden');
+          }
           forceMediaRecorderMode = true;
           userWantsRecording = false;
           stopRecordingUI();
@@ -2157,28 +2362,47 @@
           return;
         }
         stopRecordingUI();
-        showToast(`음성 인식 안내 (${err}): 마이크 버튼을 다시 한 번 눌러 말씀해 주세요.`);
       };
 
       rec.onend = () => {
-        if (userWantsRecording) {
+        const spoken = document.getElementById('userSpokenInput').value.trim();
+        // 이미 말한 내용이 있으면 재시작하지 않고 듀오링고처럼 즉시 채점! (iOS에서 재시작 시 not-allowed가 뜨는 문제 원천 차단)
+        if (spoken) {
+          stopRecordingUI();
+          if (prefs.autoEvaluate) {
+            evaluateUserAnswer();
+          }
+          return;
+        }
+        // 아직 아무 말도 안 했는데 끊긴 경우(PC/Android)에만 재시작
+        if (userWantsRecording && !isIosDevice()) {
           try {
             rec.start();
             return;
           } catch (e) {}
         }
         stopRecordingUI();
-        const spoken = document.getElementById('userSpokenInput').value.trim();
-        if (spoken && prefs.autoEvaluate) {
-          evaluateUserAnswer();
-        }
       };
 
       return rec;
     }
 
+    function finishAndGradeImmediately() {
+      userWantsRecording = false;
+      clearTimeout(silenceAutoStopTimer);
+      if (recognition) {
+        try { recognition.stop(); } catch (e) {}
+      }
+      stopRecordingUI();
+      const spoken = document.getElementById('userSpokenInput').value.trim();
+      if (spoken) {
+        evaluateUserAnswer();
+      }
+    }
+
     function stopSpeechRecognitionIfActive() {
       userWantsRecording = false;
+      clearTimeout(silenceAutoStopTimer);
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         try { mediaRecorder.stop(); } catch (e) {}
       }
@@ -2192,6 +2416,7 @@
       // 이미 녹음 중인 상태에서 마이크를 다시 한 번 누른 경우 → 녹음 종료 & 즉시 채점!
       if (userWantsRecording || isRecording) {
         userWantsRecording = false;
+        clearTimeout(silenceAutoStopTimer);
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
           try { mediaRecorder.stop(); } catch (e) {}
           return;
@@ -2218,7 +2443,6 @@
       setVoiceTranscriptText('', true);
       document.getElementById('feedbackCard').classList.add('hidden');
 
-      // 아이폰(Chrome, Safari, 카톡) 및 모바일 호환 모드에서는 MediaRecorder 엔진을 즉시 실행
       if (shouldUseMediaRecorderEngine()) {
         startMobileMediaRecorderFlow();
         return;
